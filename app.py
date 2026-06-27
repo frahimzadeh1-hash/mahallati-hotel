@@ -465,7 +465,8 @@ st.markdown("""
         داده‌ها به‌صورت لحظه‌ای بروزرسانی می‌شوند | نسخه ۱.۰
     </p>
 </div>
-""", unsafe_allow_html=True)import streamlit as st
+""", unsafe_allow_html=True)
+import streamlit as st
 import pandas as pd
 import plotly.express as px
 from datetime import datetime, timedelta
@@ -931,5 +932,7 @@ st.markdown("""
     <p style="font-size: 11px; color: #999;">
         داده‌ها به‌صورت لحظه‌ای بروزرسانی می‌شوند | نسخه ۱.۰
     </p>
+</div>
+""", unsafe_allow_html=True)
 </div>
 """, unsafe_allow_html=True)mahallati-hotel
