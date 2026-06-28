@@ -1,3 +1,4 @@
 #!/bin/bash
-pip install --upgrade pip setuptools wheel
-pip install --no-cache-dir --only-binary :all: -r requirements.txt
+python -m pip install --upgrade pip
+python -m pip install setuptools wheel
+python -m pip install --no-cache-dir -r requirements.txt
