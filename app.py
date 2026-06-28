@@ -11,6 +11,82 @@ from sklearn.linear_model import LinearRegression
 from sklearn.model_selection import train_test_split
 from sklearn.metrics import mean_absolute_error
 import numpy as np
+import requests
+import json
+
+# ============================================
+# تنظیمات هویتی هتل
+# ============================================
+HOTEL_CONFIG = {
+    "name": "بوتیک هتل محلاتی",
+    "logo_url": "https://www.hotelmahalati.com/images/logo.png",
+    "logo_text": "🏛️",
+    "rooms": [
+        {"name": "ترنج", "price": 8500000},
+        {"name": "پریدخت", "price": 9112000},
+        {"name": "پریچهر", "price": 9112000},
+        {"name": "دلکش و دلربا", "price": 9112000},
+        {"name": "گلدان و گلرخ", "price": 9112000},
+        {"name": "شاهدخت", "price": 13427000},
+        {"name": "شازده", "price": 12000000},
+        {"name": "شاه نشین", "price": 15000000},
+        {"name": "آینه", "price": 14093000},
+        {"name": "دنج", "price": 3876000}
+    ],
+    "colors": {
+        "primary": "#0B7A75",
+        "secondary": "#14A085",
+        "accent": "#F4A460",
+        "background": "#F0F7F4",
+        "text": "#1A2E2A"
+    },
+    "event_categories": ["موسیقی", "شعر", "هنرهای تجسمی", "تاریخ و معماری", "خوشنویسی"]
+}
+
+# ============================================
+# توابع تاریخ و مناسبت‌ها
+# ============================================
+
+def get_persian_date():
+    """گرفتن تاریخ شمسی"""
+    now = datetime.now()
+    persian = jdatetime.datetime.fromgregorian(datetime=now)
+    days = ['یک‌شنبه', 'دوشنبه', 'سه‌شنبه', 'چهارشنبه', 'پنج‌شنبه', 'جمعه', 'شنبه']
+    return {
+        'jalali': f"{days[persian.weekday()]} {persian.day} {['فروردین','اردیبهشت','خرداد','تیر','مرداد','شهریور','مهر','آبان','آذر','دی','بهمن','اسفند'][persian.month-1]} {persian.year}",
+        'gregorian': now.strftime("%A, %B %d, %Y"),
+        'hijri': get_hijri_date(now)
+    }
+
+def get_hijri_date(date_obj):
+    """گرفتن تاریخ قمری (با استفاده از API)"""
+    try:
+        # استفاده از API رایگان برای تبدیل تاریخ
+        url = f"https://api.aladhan.com/v1/gToH/{date_obj.year}/{date_obj.month}/{date_obj.day}"
+        response = requests.get(url, timeout=5)
+        if response.status_code == 200:
+            data = response.json()
+            if data['code'] == 200:
+                hijri = data['data']['hijri']
+                return f"{hijri['day']} {hijri['month']['en']} {hijri['year']} هجری قمری"
+    except:
+        pass
+    return "تاریخ قمری در دسترس نیست"
+
+def get_event_of_day():
+    """گرفتن مناسبت روز (با استفاده از API)"""
+    try:
+        # API رایگان برای مناسبت‌های ایرانی
+        url = "https://api.parsijoo.ir/events/today"
+        response = requests.get(url, timeout=5)
+        if response.status_code == 200:
+            data = response.json()
+            if data and 'events' in data:
+                events = data['events']
+                return " - ".join(events[:2])  # حداکثر ۲ مناسبت
+    except:
+        pass
+    return ""
 
 # ============================================
 # توابع کمکی برای تبدیل تاریخ و اعداد
@@ -53,36 +129,7 @@ def format_price_persian(price):
         return str(price)
 
 # ============================================
-# تنظیمات هویتی هتل با لوگو
-# ============================================
-HOTEL_CONFIG = {
-    "name": "بوتیک هتل محلاتی",
-    "logo_url": "https://www.hotelmahalati.com/images/logo.png",
-    "logo_text": "🏛️",
-    "rooms": [
-        {"name": "ترنج", "price": 8500000},
-        {"name": "پریدخت", "price": 9112000},
-        {"name": "پریچهر", "price": 9112000},
-        {"name": "دلکش و دلربا", "price": 9112000},
-        {"name": "گلدان و گلرخ", "price": 9112000},
-        {"name": "شاهدخت", "price": 13427000},
-        {"name": "شازده", "price": 12000000},
-        {"name": "شاه نشین", "price": 15000000},
-        {"name": "آینه", "price": 14093000},
-        {"name": "دنج", "price": 3876000}
-    ],
-    "colors": {
-        "primary": "#0B7A75",
-        "secondary": "#14A085",
-        "accent": "#F4A460",
-        "background": "#F0F7F4",
-        "text": "#1A2E2A"
-    },
-    "event_categories": ["موسیقی", "شعر", "هنرهای تجسمی", "تاریخ و معماری", "خوشنویسی"]
-}
-
-# ============================================
-# تنظیمات صفحه با لوگو
+# تنظیمات صفحه
 # ============================================
 st.set_page_config(
     page_title=f"🏨 {HOTEL_CONFIG['name']} - داشبورد مدیریت",
@@ -90,6 +137,10 @@ st.set_page_config(
     layout="wide",
     initial_sidebar_state="expanded"
 )
+
+# دریافت تاریخ و مناسبت
+date_info = get_persian_date()
+event_of_day = get_event_of_day()
 
 # اعمال استایل هویتی
 st.markdown(f"""
@@ -99,29 +150,52 @@ st.markdown(f"""
         direction: rtl;
         font-family: 'Vazir', sans-serif;
     }}
-    .hotel-header {{
+    
+    /* هدر با لوگو و تاریخ */
+    .custom-header {{
         background: linear-gradient(135deg, {HOTEL_CONFIG['colors']['primary']}, {HOTEL_CONFIG['colors']['secondary']});
-        padding: 20px 30px;
+        padding: 15px 25px;
         border-radius: 12px;
         color: white;
-        text-align: center;
         margin-bottom: 25px;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
         border-right: 6px solid {HOTEL_CONFIG['colors']['accent']};
+    }}
+    .custom-header .title-section {{
         display: flex;
         align-items: center;
-        justify-content: center;
-        gap: 20px;
+        gap: 15px;
     }}
-    .hotel-header img {{
-        height: 60px;
-        border-radius: 10px;
+    .custom-header .title-section img {{
+        height: 50px;
+        border-radius: 8px;
         background: white;
         padding: 5px;
     }}
-    .hotel-header h1, .hotel-header h2, .hotel-header p {{
-        color: white !important;
+    .custom-header .title-section h1 {{
+        color: white;
         margin: 0;
+        font-size: 22px;
     }}
+    .custom-header .title-section p {{
+        color: rgba(255,255,255,0.9);
+        margin: 0;
+        font-size: 14px;
+    }}
+    .custom-header .date-section {{
+        text-align: left;
+        font-size: 13px;
+        color: rgba(255,255,255,0.95);
+        line-height: 1.6;
+    }}
+    .custom-header .date-section .event {{
+        color: {HOTEL_CONFIG['colors']['accent']};
+        font-weight: bold;
+    }}
+    
+    /* استایل متریک‌ها */
     .stMetric {{
         background-color: white;
         padding: 15px;
@@ -138,6 +212,7 @@ st.markdown(f"""
         font-size: 28px !important;
         font-weight: bold;
     }}
+    
     .stButton>button {{
         background: {HOTEL_CONFIG['colors']['secondary']};
         color: white;
@@ -152,6 +227,8 @@ st.markdown(f"""
         transform: scale(1.03);
         box-shadow: 0 4px 12px rgba(11,122,117,0.3);
     }}
+    
+    /* باکس پیش‌بینی */
     .prediction-box {{
         background: linear-gradient(135deg, #E8F5E9, #C8E6C9);
         padding: 20px;
@@ -169,15 +246,51 @@ st.markdown(f"""
         font-weight: bold;
         color: #0B7A75;
     }}
+    
+    /* دکمه حذف */
+    .delete-btn {{
+        background: #dc3545 !important;
+        color: white !important;
+        border: none;
+        border-radius: 5px;
+        padding: 4px 10px;
+        font-size: 12px;
+        cursor: pointer;
+    }}
+    .delete-btn:hover {{
+        background: #c82333 !important;
+    }}
 </style>
 """, unsafe_allow_html=True)
 
 # ============================================
-# توابع تولید داده‌های نمونه
+# نمایش هدر سفارشی با لوگو و تاریخ
+# ============================================
+
+st.markdown(f"""
+<div class="custom-header">
+    <div class="title-section">
+        <img src="{HOTEL_CONFIG['logo_url']}" alt="لوگو هتل" onerror="this.style.display='none'">
+        <div>
+            <h1>🏨 داشبورد حرفه‌ای مدیریت هتل</h1>
+            <p>{HOTEL_CONFIG['name']} - شیراز</p>
+        </div>
+    </div>
+    <div class="date-section">
+        <div>📅 {date_info['jalali']}</div>
+        <div style="font-size: 11px; opacity: 0.8;">{date_info['gregorian']}</div>
+        <div style="font-size: 11px; opacity: 0.8;">{date_info['hijri']}</div>
+        {f'<div class="event">🎉 {event_of_day}</div>' if event_of_day else ''}
+    </div>
+</div>
+""", unsafe_allow_html=True)
+
+# ============================================
+# توابع تولید/بارگذاری داده
 # ============================================
 
 def generate_realistic_data():
-    """تولید داده‌های نمونه بر اساس اطلاعات واقعی هتل"""
+    """تولید داده‌های نمونه"""
     if not os.path.exists('data'):
         os.makedirs('data')
     
@@ -190,10 +303,10 @@ def generate_realistic_data():
     channels = ['وب‌سایت', 'بوکینگ', 'اینستاگرام', 'تلفن', 'حضوری']
     
     end_date = datetime.now()
-    start_date = end_date - timedelta(days=365)  # یک سال داده برای پیش‌بینی بهتر
+    start_date = end_date - timedelta(days=365)
     date_range = pd.date_range(start=start_date, end=end_date, freq='D')
     
-    # ---- تولید مهمانان ----
+    # مهمانان
     guests = []
     for i in range(300):
         guest = {
@@ -211,7 +324,7 @@ def generate_realistic_data():
     guests_df = pd.DataFrame(guests)
     guests_df.to_csv('data/guests.csv', index=False, encoding='utf-8-sig')
     
-    # ---- تولید رزرو با داده‌های بیشتر برای پیش‌بینی ----
+    # رزروها
     reservations = []
     room_names = [room['name'] for room in HOTEL_CONFIG['rooms']]
     for i in range(800):
@@ -235,7 +348,7 @@ def generate_realistic_data():
     reservations_df = pd.DataFrame(reservations)
     reservations_df.to_csv('data/reservations.csv', index=False, encoding='utf-8-sig')
     
-    # ---- تولید ایونت‌ها ----
+    # ایونت‌ها
     events = []
     event_templates = [
         ('شب شعر حافظ و سعدی', 'شعر', 35, 18),
@@ -266,10 +379,6 @@ def generate_realistic_data():
     
     return guests_df, reservations_df, events_df
 
-# ============================================
-# توابع بارگذاری و ذخیره داده
-# ============================================
-
 def load_data():
     try:
         guests = pd.read_csv('data/guests.csv', encoding='utf-8-sig')
@@ -288,57 +397,41 @@ def save_data(guests_df, reservations_df, events_df):
     events_df.to_csv('data/events.csv', index=False, encoding='utf-8-sig')
 
 # ============================================
-# توابع پیش‌بینی (جدید)
+# توابع پیش‌بینی
 # ============================================
 
 def predict_occupancy(reservations_df, days_ahead=30):
-    """پیش‌بینی نرخ اشغال برای روزهای آینده"""
+    """پیش‌بینی نرخ اشغال"""
     if reservations_df.empty:
-        return None, None
+        return None
     
     completed = reservations_df[reservations_df['وضعیت'] == 'تکمیل‌شده'].copy()
     if completed.empty:
-        return None, None
+        return None
     
-    # آماده‌سازی داده‌ها
     completed['تاریخ_ورود'] = pd.to_datetime(completed['تاریخ_ورود'])
     daily_occupancy = completed.groupby('تاریخ_ورود').size().reset_index()
     daily_occupancy.columns = ['تاریخ', 'تعداد']
     
-    # ایجاد ویژگی‌های زمانی
-    daily_occupancy['روز_هفته'] = daily_occupancy['تاریخ'].dt.dayofweek
-    daily_occupancy['ماه'] = daily_occupancy['تاریخ'].dt.month
-    daily_occupancy['روز_ماه'] = daily_occupancy['تاریخ'].dt.day
-    
-    # ایجاد داده‌های تاریخی
     days = np.array(range(len(daily_occupancy))).reshape(-1, 1)
-    X = days
     y = daily_occupancy['تعداد'].values
     
-    # آموزش مدل
     try:
         model = LinearRegression()
-        model.fit(X, y)
+        model.fit(days, y)
         
-        # پیش‌بینی روزهای آینده
         last_day = len(daily_occupancy)
         future_days = np.array(range(last_day, last_day + days_ahead)).reshape(-1, 1)
         predictions = model.predict(future_days)
-        
-        # ایجاد تاریخ‌های آینده
-        last_date = daily_occupancy['تاریخ'].max()
-        future_dates = [last_date + timedelta(days=i+1) for i in range(days_ahead)]
-        
-        # حداقل ۰ و حداکثر ظرفیت هتل (۱۰ اتاق)
         predictions = np.maximum(predictions, 0)
         predictions = np.minimum(predictions, 10)
         
-        # میانگین پیش‌بینی
-        avg_prediction = np.mean(predictions)
+        last_date = daily_occupancy['تاریخ'].max()
+        future_dates = [last_date + timedelta(days=i+1) for i in range(days_ahead)]
         
-        # پیش‌بینی ADR
+        avg_prediction = np.mean(predictions)
         avg_adr = completed['قیمت_هر_شب'].mean()
-        predicted_revenue = avg_prediction * avg_adr * 30  # تخمین درآمد ماهانه
+        predicted_revenue = avg_prediction * avg_adr * 30
         
         return {
             'avg_occupancy': avg_prediction,
@@ -349,10 +442,10 @@ def predict_occupancy(reservations_df, days_ahead=30):
             'daily_occupancy': daily_occupancy
         }
     except:
-        return None, None
+        return None
 
 def predict_guest_growth(guests_df, months_ahead=3):
-    """پیش‌بینی رشد تعداد مهمانان"""
+    """پیش‌بینی رشد مهمانان"""
     if guests_df.empty:
         return None
     
@@ -385,17 +478,14 @@ def predict_guest_growth(guests_df, months_ahead=3):
         return None
 
 def predict_events_success(events_df):
-    """پیش‌بینی موفقیت ایونت‌های آینده"""
+    """پیش‌بینی موفقیت ایونت‌ها"""
     if events_df.empty:
         return None
     
-    # تحلیل ایونت‌های گذشته
     events_copy = events_df.copy()
     events_copy['درصد_پر_شدن'] = (events_copy['ثبت_نام'] / events_copy['ظرفیت']) * 100
     
     avg_success = events_copy['درصد_پر_شدن'].mean()
-    
-    # دسته‌بندی موفق‌ترین ایونت‌ها
     best_category = events_copy.groupby('دسته_بندی')['درصد_پر_شدن'].mean().idxmax()
     
     return {
@@ -405,7 +495,7 @@ def predict_events_success(events_df):
     }
 
 # ============================================
-# توابع محاسباتی و تحلیلی
+# توابع محاسباتی و نمودارها
 # ============================================
 
 def calculate_kpis(guests_df, reservations_df, events_df):
@@ -427,15 +517,8 @@ def calculate_kpis(guests_df, reservations_df, events_df):
         completed['شب‌ها'] = (completed['تاریخ_خروج'] - completed['تاریخ_ورود']).dt.days
         revenue = (completed['قیمت_هر_شب'] * completed['شب‌ها']).sum()
     
-    if not completed.empty:
-        popular_room = completed['اتاق'].mode()[0] if not completed['اتاق'].empty else 'نامشخص'
-    else:
-        popular_room = 'نامشخص'
-    
-    if 'علاقه_هنری' in guests_df.columns and not guests_df.empty:
-        popular_art = guests_df['علاقه_هنری'].mode()[0] if not guests_df['علاقه_هنری'].empty else 'نامشخص'
-    else:
-        popular_art = 'هنر (ثبت نشده)'
+    popular_room = completed['اتاق'].mode()[0] if not completed.empty and not completed['اتاق'].empty else 'نامشخص'
+    popular_art = guests_df['علاقه_هنری'].mode()[0] if 'علاقه_هنری' in guests_df.columns and not guests_df.empty else 'نامشخص'
     
     return {
         'total_guests': total_guests,
@@ -480,12 +563,10 @@ def plot_geography(guests_df):
 def plot_art_preferences(guests_df):
     if guests_df.empty:
         return px.bar(title='داده‌ای وجود ندارد')
-    
     if 'علاقه_هنری' not in guests_df.columns:
         fig = px.bar(title='داده‌ای برای تحلیل هنری وجود ندارد')
         fig.update_layout(annotations=[{'text': 'ستون علاقه هنری موجود نیست', 'x': 0.5, 'y': 0.5, 'showarrow': False}])
         return fig
-    
     counts = guests_df['علاقه_هنری'].value_counts().reset_index()
     counts.columns = ['علاقه', 'تعداد']
     fig = px.bar(counts, x='علاقه', y='تعداد', title='علایق هنری مهمانان',
@@ -545,11 +626,9 @@ def plot_events_dashboard(events_df):
 def plot_event_revenue(events_df, reservations_df):
     if events_df.empty or reservations_df.empty:
         return px.bar(title='داده‌ای وجود ندارد')
-    
     event_rev = events_df.copy()
     event_rev['درآمد'] = event_rev['ثبت_نام'] * (event_rev['قیمت'] / 10000)
     event_rev = event_rev.sort_values('درآمد', ascending=True)
-    
     fig = px.bar(event_rev, x='درآمد', y='نام_ایونت', title='درآمد ایونت‌ها (هزار تومان)',
                  color='درآمد', color_continuous_scale=[HOTEL_CONFIG['colors']['secondary'], HOTEL_CONFIG['colors']['accent']], 
                  orientation='h')
@@ -558,13 +637,9 @@ def plot_event_revenue(events_df, reservations_df):
     return fig
 
 def plot_prediction_chart(prediction_data):
-    """نمودار پیش‌بینی اشغال"""
     if prediction_data is None:
         return None
-    
     fig = go.Figure()
-    
-    # داده‌های تاریخی
     historical = prediction_data['daily_occupancy']
     fig.add_trace(go.Scatter(
         x=historical['تاریخ'],
@@ -573,8 +648,6 @@ def plot_prediction_chart(prediction_data):
         name='داده‌های تاریخی',
         line=dict(color=HOTEL_CONFIG['colors']['primary'], width=2)
     ))
-    
-    # پیش‌بینی‌ها
     future_dates = prediction_data['future_dates']
     predictions = prediction_data['predictions']
     fig.add_trace(go.Scatter(
@@ -585,7 +658,6 @@ def plot_prediction_chart(prediction_data):
         line=dict(color='#FF6B6B', width=3, dash='dash'),
         marker=dict(size=8)
     ))
-    
     fig.update_layout(
         title='پیش‌بینی نرخ اشغال هتل',
         xaxis_title='تاریخ',
@@ -593,42 +665,66 @@ def plot_prediction_chart(prediction_data):
         height=400,
         hovermode='x'
     )
-    
     return fig
 
 # ============================================
-# بخش مدیریت اطلاعات
+# بخش مدیریت اطلاعات با قابلیت حذف و آپلود
 # ============================================
 
 def management_section(guests_df, reservations_df, events_df):
     st.header("📝 پنل مدیریت اطلاعات")
     
-    tab1, tab2, tab3, tab4 = st.tabs(["👤 مهمانان", "🏠 رزروها", "🎭 ایونت‌ها", "📊 ثبت‌نام ایونت"])
+    tab1, tab2, tab3, tab4, tab5 = st.tabs(["👤 مهمانان", "🏠 رزروها", "🎭 ایونت‌ها", "📊 ثبت‌نام ایونت", "📤 آپلود فایل"])
     
+    # ===== تب ۱: مدیریت مهمانان با قابلیت حذف =====
     with tab1:
         st.subheader("👤 مدیریت مهمانان")
-        col1, col2 = st.columns([2, 1])
-        with col1:
-            display_guests = guests_df.copy()
-            if 'تاریخ_اولین_اقامت' in display_guests.columns:
-                display_guests['تاریخ_اولین_اقامت'] = display_guests['تاریخ_اولین_اقامت'].apply(
-                    lambda x: to_persian_date(x) if pd.notna(x) else ''
-                )
-            if 'امتیاز_وفاداری' in display_guests.columns:
-                display_guests['امتیاز_وفاداری'] = display_guests['امتیاز_وفاداری'].apply(to_persian_number)
-            if 'شماره_تماس' in display_guests.columns:
-                display_guests['شماره_تماس'] = display_guests['شماره_تماس'].apply(to_persian_number)
-            
-            st.dataframe(display_guests, use_container_width=True, hide_index=True)
         
+        # دکمه حذف همه
+        col1, col2 = st.columns([3, 1])
         with col2:
+            if st.button("🗑️ حذف همه مهمانان", type="secondary"):
+                guests_df = pd.DataFrame(columns=guests_df.columns)
+                save_data(guests_df, reservations_df, events_df)
+                st.success("✅ همه مهمانان حذف شدند!")
+                st.rerun()
+        
+        # نمایش جدول با دکمه حذف
+        display_guests = guests_df.copy()
+        if 'تاریخ_اولین_اقامت' in display_guests.columns:
+            display_guests['تاریخ_اولین_اقامت'] = display_guests['تاریخ_اولین_اقامت'].apply(
+                lambda x: to_persian_date(x) if pd.notna(x) else ''
+            )
+        if 'امتیاز_وفاداری' in display_guests.columns:
+            display_guests['امتیاز_وفاداری'] = display_guests['امتیاز_وفاداری'].apply(to_persian_number)
+        if 'شماره_تماس' in display_guests.columns:
+            display_guests['شماره_تماس'] = display_guests['شماره_تماس'].apply(to_persian_number)
+        
+        # اضافه کردن ستون عملیات
+        if not display_guests.empty and 'guest_id' in display_guests.columns:
+            for idx, row in display_guests.iterrows():
+                col1, col2 = st.columns([10, 1])
+                with col1:
+                    st.write(f"{row['guest_id']} - {row['نام']} {row['نام_خانوادگی']} - {row['شماره_تماس']} - {row['شهر']} - {row['علاقه_هنری']}")
+                with col2:
+                    if st.button("🗑️", key=f"del_guest_{row['guest_id']}"):
+                        guests_df = guests_df[guests_df['guest_id'] != row['guest_id']]
+                        save_data(guests_df, reservations_df, events_df)
+                        st.rerun()
+        
+        st.dataframe(display_guests, use_container_width=True, hide_index=True)
+        
+        # فرم افزودن مهمان
+        with st.expander("➕ افزودن مهمان جدید"):
             with st.form("add_guest"):
-                st.subheader("➕ افزودن مهمان جدید")
-                first = st.text_input("نام")
-                last = st.text_input("نام خانوادگی")
-                phone = st.text_input("شماره تماس")
-                city = st.selectbox("شهر", ['تهران', 'شیراز', 'اصفهان', 'مشهد', 'تبریز', 'یزد', 'کاشان', 'کرمان'])
-                art = st.selectbox("علاقه هنری", HOTEL_CONFIG['event_categories'])
+                col1, col2 = st.columns(2)
+                with col1:
+                    first = st.text_input("نام")
+                    last = st.text_input("نام خانوادگی")
+                    phone = st.text_input("شماره تماس")
+                with col2:
+                    city = st.selectbox("شهر", ['تهران', 'شیراز', 'اصفهان', 'مشهد', 'تبریز', 'یزد', 'کاشان', 'کرمان'])
+                    art = st.selectbox("علاقه هنری", HOTEL_CONFIG['event_categories'])
                 if st.form_submit_button("افزودن مهمان"):
                     if first and last and phone:
                         new_id = f"G{len(guests_df) + 1000}"
@@ -650,33 +746,54 @@ def management_section(guests_df, reservations_df, events_df):
                     else:
                         st.error("❌ نام و شماره تماس الزامی است!")
     
+    # ===== تب ۲: مدیریت رزروها با قابلیت حذف =====
     with tab2:
         st.subheader("🏠 مدیریت رزروها")
-        col1, col2 = st.columns([2, 1])
-        with col1:
-            display_res = reservations_df.copy()
-            if 'تاریخ_ورود' in display_res.columns:
-                display_res['تاریخ_ورود'] = display_res['تاریخ_ورود'].apply(
-                    lambda x: to_persian_date(x) if pd.notna(x) else ''
-                )
-            if 'تاریخ_خروج' in display_res.columns:
-                display_res['تاریخ_خروج'] = display_res['تاریخ_خروج'].apply(
-                    lambda x: to_persian_date(x) if pd.notna(x) else ''
-                )
-            if 'قیمت_هر_شب' in display_res.columns:
-                display_res['قیمت_هر_شب'] = display_res['قیمت_هر_شب'].apply(format_price_persian)
-            
-            st.dataframe(display_res, use_container_width=True, hide_index=True)
         
+        col1, col2 = st.columns([3, 1])
         with col2:
+            if st.button("🗑️ حذف همه رزروها", type="secondary"):
+                reservations_df = pd.DataFrame(columns=reservations_df.columns)
+                save_data(guests_df, reservations_df, events_df)
+                st.success("✅ همه رزروها حذف شدند!")
+                st.rerun()
+        
+        display_res = reservations_df.copy()
+        if 'تاریخ_ورود' in display_res.columns:
+            display_res['تاریخ_ورود'] = display_res['تاریخ_ورود'].apply(
+                lambda x: to_persian_date(x) if pd.notna(x) else ''
+            )
+        if 'تاریخ_خروج' in display_res.columns:
+            display_res['تاریخ_خروج'] = display_res['تاریخ_خروج'].apply(
+                lambda x: to_persian_date(x) if pd.notna(x) else ''
+            )
+        if 'قیمت_هر_شب' in display_res.columns:
+            display_res['قیمت_هر_شب'] = display_res['قیمت_هر_شب'].apply(format_price_persian)
+        
+        if not display_res.empty and 'شناسه_رزرو' in display_res.columns:
+            for idx, row in display_res.iterrows():
+                col1, col2 = st.columns([10, 1])
+                with col1:
+                    st.write(f"{row['شناسه_رزرو']} - {row['اتاق']} - {row['تاریخ_ورود']} تا {row['تاریخ_خروج']} - {row['قیمت_هر_شب']}")
+                with col2:
+                    if st.button("🗑️", key=f"del_res_{row['شناسه_رزرو']}"):
+                        reservations_df = reservations_df[reservations_df['شناسه_رزرو'] != row['شناسه_رزرو']]
+                        save_data(guests_df, reservations_df, events_df)
+                        st.rerun()
+        
+        st.dataframe(display_res, use_container_width=True, hide_index=True)
+        
+        with st.expander("➕ افزودن رزرو جدید"):
             with st.form("add_reservation"):
-                st.subheader("➕ افزودن رزرو جدید")
-                guest_id = st.selectbox("شناسه مهمان", guests_df['guest_id'].tolist())
-                check_in = st.date_input("تاریخ ورود")
-                check_out = st.date_input("تاریخ خروج")
-                room_type = st.selectbox("نوع اتاق", [room['name'] for room in HOTEL_CONFIG['rooms']])
-                price = st.number_input("قیمت هر شب (تومان)", min_value=100000, step=100000, value=5000000)
-                channel = st.selectbox("کانال رزرو", ['وب‌سایت', 'بوکینگ', 'اینستاگرام', 'تلفن', 'حضوری'])
+                col1, col2 = st.columns(2)
+                with col1:
+                    guest_id = st.selectbox("شناسه مهمان", guests_df['guest_id'].tolist() if not guests_df.empty else [''])
+                    check_in = st.date_input("تاریخ ورود")
+                    check_out = st.date_input("تاریخ خروج")
+                with col2:
+                    room_type = st.selectbox("نوع اتاق", [room['name'] for room in HOTEL_CONFIG['rooms']])
+                    price = st.number_input("قیمت هر شب (تومان)", min_value=100000, step=100000, value=5000000)
+                    channel = st.selectbox("کانال رزرو", ['وب‌سایت', 'بوکینگ', 'اینستاگرام', 'تلفن', 'حضوری'])
                 if st.form_submit_button("افزودن رزرو"):
                     if guest_id and check_in and check_out:
                         new_id = f"R{len(reservations_df) + 10000}"
@@ -697,32 +814,53 @@ def management_section(guests_df, reservations_df, events_df):
                     else:
                         st.error("❌ همه فیلدها را پر کنید!")
     
+    # ===== تب ۳: مدیریت ایونت‌ها با قابلیت حذف =====
     with tab3:
         st.subheader("🎭 مدیریت ایونت‌ها")
-        col1, col2 = st.columns([2, 1])
-        with col1:
-            display_events = events_df.copy()
-            if 'تاریخ' in display_events.columns:
-                display_events['تاریخ'] = display_events['تاریخ'].apply(
-                    lambda x: to_persian_date(x) if pd.notna(x) else ''
-                )
-            if 'قیمت' in display_events.columns:
-                display_events['قیمت'] = display_events['قیمت'].apply(format_price_persian)
-            if 'ظرفیت' in display_events.columns:
-                display_events['ظرفیت'] = display_events['ظرفیت'].apply(to_persian_number)
-            if 'ثبت_نام' in display_events.columns:
-                display_events['ثبت_نام'] = display_events['ثبت_نام'].apply(to_persian_number)
-            
-            st.dataframe(display_events, use_container_width=True, hide_index=True)
         
+        col1, col2 = st.columns([3, 1])
         with col2:
+            if st.button("🗑️ حذف همه ایونت‌ها", type="secondary"):
+                events_df = pd.DataFrame(columns=events_df.columns)
+                save_data(guests_df, reservations_df, events_df)
+                st.success("✅ همه ایونت‌ها حذف شدند!")
+                st.rerun()
+        
+        display_events = events_df.copy()
+        if 'تاریخ' in display_events.columns:
+            display_events['تاریخ'] = display_events['تاریخ'].apply(
+                lambda x: to_persian_date(x) if pd.notna(x) else ''
+            )
+        if 'قیمت' in display_events.columns:
+            display_events['قیمت'] = display_events['قیمت'].apply(format_price_persian)
+        if 'ظرفیت' in display_events.columns:
+            display_events['ظرفیت'] = display_events['ظرفیت'].apply(to_persian_number)
+        if 'ثبت_نام' in display_events.columns:
+            display_events['ثبت_نام'] = display_events['ثبت_نام'].apply(to_persian_number)
+        
+        if not display_events.empty and 'شناسه_ایونت' in display_events.columns:
+            for idx, row in display_events.iterrows():
+                col1, col2 = st.columns([10, 1])
+                with col1:
+                    st.write(f"{row['شناسه_ایونت']} - {row['نام_ایونت']} - {row['تاریخ']} - ظرفیت: {row['ظرفیت']} - ثبت‌نام: {row['ثبت_نام']}")
+                with col2:
+                    if st.button("🗑️", key=f"del_event_{row['شناسه_ایونت']}"):
+                        events_df = events_df[events_df['شناسه_ایونت'] != row['شناسه_ایونت']]
+                        save_data(guests_df, reservations_df, events_df)
+                        st.rerun()
+        
+        st.dataframe(display_events, use_container_width=True, hide_index=True)
+        
+        with st.expander("➕ افزودن ایونت جدید"):
             with st.form("add_event"):
-                st.subheader("➕ افزودن ایونت جدید")
-                name = st.text_input("نام ایونت")
-                date = st.date_input("تاریخ برگزاری")
-                capacity = st.number_input("ظرفیت", min_value=1, value=30)
-                price = st.number_input("قیمت (تومان)", min_value=0, step=100000, value=1000000)
-                category = st.selectbox("دسته‌بندی", HOTEL_CONFIG['event_categories'])
+                col1, col2 = st.columns(2)
+                with col1:
+                    name = st.text_input("نام ایونت")
+                    date = st.date_input("تاریخ برگزاری")
+                with col2:
+                    capacity = st.number_input("ظرفیت", min_value=1, value=30)
+                    price = st.number_input("قیمت (تومان)", min_value=0, step=100000, value=1000000)
+                    category = st.selectbox("دسته‌بندی", HOTEL_CONFIG['event_categories'])
                 if st.form_submit_button("افزودن ایونت"):
                     if name and date:
                         new_id = f"E{len(events_df) + 2000}"
@@ -742,52 +880,118 @@ def management_section(guests_df, reservations_df, events_df):
                     else:
                         st.error("❌ نام و تاریخ ایونت الزامی است!")
     
+    # ===== تب ۴: ثبت‌نام در ایونت =====
     with tab4:
         st.subheader("📊 ثبت‌نام مهمانان در ایونت‌ها")
         col1, col2 = st.columns(2)
         with col1:
-            selected_event = st.selectbox("ایونت مورد نظر", events_df['نام_ایونت'].tolist())
-            event_data = events_df[events_df['نام_ایونت'] == selected_event]
-            if not event_data.empty:
-                st.info(f"""
-                **📋 اطلاعات ایونت:**
-                - تاریخ: {to_persian_date(event_data['تاریخ'].iloc[0])}
-                - ظرفیت: {to_persian_number(event_data['ظرفیت'].iloc[0])}
-                - ثبت‌نام فعلی: {to_persian_number(event_data['ثبت_نام'].iloc[0])}
-                - جای خالی: {to_persian_number(event_data['ظرفیت'].iloc[0] - event_data['ثبت_نام'].iloc[0])}
-                """)
+            if not events_df.empty:
+                selected_event = st.selectbox("ایونت مورد نظر", events_df['نام_ایونت'].tolist())
+                event_data = events_df[events_df['نام_ایونت'] == selected_event]
+                if not event_data.empty:
+                    st.info(f"""
+                    **📋 اطلاعات ایونت:**
+                    - تاریخ: {to_persian_date(event_data['تاریخ'].iloc[0])}
+                    - ظرفیت: {to_persian_number(event_data['ظرفیت'].iloc[0])}
+                    - ثبت‌نام فعلی: {to_persian_number(event_data['ثبت_نام'].iloc[0])}
+                    - جای خالی: {to_persian_number(event_data['ظرفیت'].iloc[0] - event_data['ثبت_نام'].iloc[0])}
+                    """)
+            else:
+                st.warning("هیچ ایونتی برای نمایش وجود ندارد")
         with col2:
-            guest_list = guests_df['نام'] + ' ' + guests_df['نام_خانوادگی'] + ' (' + guests_df['guest_id'] + ')'
-            selected_guest = st.selectbox("مهمان", guest_list.tolist())
-            if st.button("✅ ثبت‌نام در ایونت", use_container_width=True):
-                event_idx = events_df[events_df['نام_ایونت'] == selected_event].index[0]
-                events_df.loc[event_idx, 'ثبت_نام'] += 1
-                save_data(guests_df, reservations_df, events_df)
-                st.success(f"✅ ثبت‌نام با موفقیت انجام شد!")
-                st.balloons()
-                st.rerun()
+            if not guests_df.empty:
+                guest_list = guests_df['نام'] + ' ' + guests_df['نام_خانوادگی'] + ' (' + guests_df['guest_id'] + ')'
+                selected_guest = st.selectbox("مهمان", guest_list.tolist())
+                if st.button("✅ ثبت‌نام در ایونت", use_container_width=True):
+                    if not events_df.empty:
+                        event_idx = events_df[events_df['نام_ایونت'] == selected_event].index[0]
+                        events_df.loc[event_idx, 'ثبت_نام'] += 1
+                        save_data(guests_df, reservations_df, events_df)
+                        st.success(f"✅ ثبت‌نام با موفقیت انجام شد!")
+                        st.balloons()
+                        st.rerun()
+            else:
+                st.warning("هیچ مهمانی برای ثبت‌نام وجود ندارد")
+    
+    # ===== تب ۵: آپلود فایل =====
+    with tab5:
+        st.subheader("📤 آپلود اطلاعات مهمانان از فایل")
+        
+        st.info("""
+        **راهنمای آپلود فایل:**
+        - فایل‌های CSV یا Excel را آپلود کنید
+        - ستون‌های مورد نیاز: `نام`, `نام_خانوادگی`, `شماره_تماس`, `شهر`, `علاقه_هنری`
+        - فایل شما باید دارای هدر (عنوان ستون‌ها) باشد
+        """)
+        
+        uploaded_file = st.file_uploader(
+            "📂 انتخاب فایل (CSV یا Excel)",
+            type=['csv', 'xlsx', 'xls'],
+            help="فایل را با فرمت CSV یا Excel آپلود کنید"
+        )
+        
+        if uploaded_file is not None:
+            try:
+                # خواندن فایل
+                if uploaded_file.name.endswith('.csv'):
+                    new_guests = pd.read_csv(uploaded_file, encoding='utf-8-sig')
+                else:
+                    new_guests = pd.read_excel(uploaded_file)
+                
+                # نمایش پیش‌نمایش
+                st.subheader("📋 پیش‌نمایش داده‌های آپلود شده")
+                st.dataframe(new_guests.head(10), use_container_width=True)
+                
+                col1, col2 = st.columns(2)
+                with col1:
+                    st.write(f"**تعداد رکوردها:** {len(new_guests)}")
+                with col2:
+                    if st.button("✅ افزودن به داده‌های هتل", use_container_width=True):
+                        # بررسی ستون‌های مورد نیاز
+                        required_cols = ['نام', 'نام_خانوادگی', 'شماره_تماس']
+                        missing_cols = [col for col in required_cols if col not in new_guests.columns]
+                        
+                        if missing_cols:
+                            st.error(f"❌ ستون‌های زیر در فایل وجود ندارند: {', '.join(missing_cols)}")
+                            st.info("لطفاً فایل را با ستون‌های صحیح آماده کنید.")
+                        else:
+                            # اضافه کردن شناسه
+                            start_id = len(guests_df) + 1000
+                            new_guests['guest_id'] = [f'G{start_id + i}' for i in range(len(new_guests))]
+                            
+                            # پر کردن ستون‌های پیش‌فرض
+                            if 'شهر' not in new_guests.columns:
+                                new_guests['شهر'] = 'شیراز'
+                            if 'علاقه_هنری' not in new_guests.columns:
+                                new_guests['علاقه_هنری'] = 'هنر'
+                            if 'تاریخ_اولین_اقامت' not in new_guests.columns:
+                                new_guests['تاریخ_اولین_اقامت'] = datetime.now().strftime('%Y-%m-%d')
+                            if 'تعداد_اقامت' not in new_guests.columns:
+                                new_guests['تعداد_اقامت'] = 1
+                            if 'امتیاز_وفاداری' not in new_guests.columns:
+                                new_guests['امتیاز_وفاداری'] = 50.0
+                            
+                            # افزودن به DataFrame اصلی
+                            guests_df_updated = pd.concat([guests_df, new_guests], ignore_index=True)
+                            save_data(guests_df_updated, reservations_df, events_df)
+                            
+                            st.success(f"✅ {len(new_guests)} مهمان با موفقیت به سیستم اضافه شدند!")
+                            st.balloons()
+                            st.rerun()
+            except Exception as e:
+                st.error(f"❌ خطا در خواندن فایل: {str(e)}")
+                st.info("لطفاً فرمت فایل را بررسی کنید و دوباره تلاش کنید.")
     
     return guests_df, reservations_df, events_df
 
 # ============================================
-# بخش تحلیل و گزارش با پیش‌بینی‌ها
+# بخش تحلیل و گزارش
 # ============================================
 
 def analytics_section(guests_df, reservations_df, events_df):
     st.header("📊 تحلیل‌های هوشمند و پیش‌بینی‌ها")
     
-    # هدر با لوگو
-    st.markdown(f"""
-    <div class="hotel-header">
-        <img src="{HOTEL_CONFIG['logo_url']}" alt="لوگو هتل" onerror="this.style.display='none'">
-        <div>
-            <h1>🏛️ {HOTEL_CONFIG['name']}</h1>
-            <p style="font-size: 16px; opacity: 0.9;">تحلیل‌های عملیاتی و پیش‌بینی‌های هوشمند</p>
-        </div>
-    </div>
-    """, unsafe_allow_html=True)
-    
-    # ===== KPIها با اعداد دقیق =====
+    # KPIها
     kpis = calculate_kpis(guests_df, reservations_df, events_df)
     
     col1, col2, col3, col4, col5, col6 = st.columns(6)
@@ -796,9 +1000,7 @@ def analytics_section(guests_df, reservations_df, events_df):
     with col2:
         st.metric("📈 نرخ اشغال", f"{to_persian_number(f'{kpis['occupancy']:.1f}')}%")
     with col3:
-        # ADR با عدد دقیق (بدون سه خط)
-        adr_value = kpis['adr']
-        st.metric("💰 ADR", f"{to_persian_number(f'{adr_value:,.0f}')} تومان")
+        st.metric("💰 ADR", f"{to_persian_number(f'{kpis['adr']:,.0f}')} تومان")
     with col4:
         st.metric("🏠 اتاق محبوب", kpis['popular_room'])
     with col5:
@@ -808,10 +1010,9 @@ def analytics_section(guests_df, reservations_df, events_df):
     
     st.markdown("---")
     
-    # ===== بخش پیش‌بینی‌ها =====
+    # ===== پیش‌بینی‌ها =====
     st.subheader("🔮 پیش‌بینی‌های هوشمند")
     
-    # پیش‌بینی اشغال
     occupancy_pred = predict_occupancy(reservations_df, days_ahead=30)
     
     col1, col2, col3 = st.columns(3)
@@ -838,7 +1039,6 @@ def analytics_section(guests_df, reservations_df, events_df):
             </div>
             """, unsafe_allow_html=True)
     
-    # پیش‌بینی رشد مهمانان
     guest_pred = predict_guest_growth(guests_df, months_ahead=3)
     if guest_pred:
         with col3:
@@ -853,11 +1053,9 @@ def analytics_section(guests_df, reservations_df, events_df):
             </div>
             """, unsafe_allow_html=True)
     
-    # نمودار پیش‌بینی اشغال
     if occupancy_pred:
         st.plotly_chart(plot_prediction_chart(occupancy_pred), use_container_width=True)
     
-    # پیش‌بینی ایونت‌ها
     event_pred = predict_events_success(events_df)
     if event_pred:
         st.info(f"""
@@ -869,7 +1067,7 @@ def analytics_section(guests_df, reservations_df, events_df):
     
     st.markdown("---")
     
-    # ===== تحلیل‌های معمول =====
+    # ===== نمودارها =====
     st.subheader("👥 تحلیل مهمانان")
     col1, col2 = st.columns(2)
     with col1:
@@ -916,6 +1114,7 @@ def main():
             st.error("❌ خطای جدی در بارگذاری داده. لطفاً پوشه data را بررسی کنید.")
             st.stop()
     
+    # سایدبار
     with st.sidebar:
         st.markdown(f"""
         <div style="text-align: center; padding: 15px 0; background: linear-gradient(135deg, {HOTEL_CONFIG['colors']['primary']}, {HOTEL_CONFIG['colors']['secondary']}); 
@@ -944,7 +1143,7 @@ def main():
         guests_df, reservations_df, events_df = management_section(guests_df, reservations_df, events_df)
     
     st.markdown("---")
-    st.caption("🏛️ بوتیک هتل محلاتی - داشبورد هوشمند مدیریت | توسعه‌یافته با Streamlit")
+    st.caption("🏛️ بوتیک هتل محلاتی - داشبورد حرفه‌ای مدیریت هتل | توسعه‌یافته با Streamlit")
 
 if __name__ == "__main__":
     main()
