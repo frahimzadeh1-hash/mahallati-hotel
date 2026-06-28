@@ -7,6 +7,10 @@ import random
 import os
 import re
 import jdatetime
+from sklearn.linear_model import LinearRegression
+from sklearn.model_selection import train_test_split
+from sklearn.metrics import mean_absolute_error
+import numpy as np
 
 # ============================================
 # توابع کمکی برای تبدیل تاریخ و اعداد
@@ -14,18 +18,21 @@ import jdatetime
 
 def to_persian_number(num):
     """تبدیل اعداد انگلیسی به فارسی"""
-    if num is None or num == '' or num != num:  # بررسی NaN
+    if num is None or num == '' or num != num:
         return '۰'
     persian_digits = {'0': '۰', '1': '۱', '2': '۲', '3': '۳', '4': '۴',
                       '5': '۵', '6': '۶', '7': '۷', '8': '۸', '9': '۹'}
     try:
-        return ''.join(persian_digits.get(ch, ch) for ch in str(int(num)))
+        result = ''
+        for ch in str(int(num)):
+            result += persian_digits.get(ch, ch)
+        return result
     except (ValueError, TypeError):
         return str(num)
 
 def to_persian_date(date_obj):
     """تبدیل تاریخ میلادی به شمسی"""
-    if date_obj is None or date_obj == '' or date_obj != date_obj:  # بررسی NaN
+    if date_obj is None or date_obj == '' or date_obj != date_obj:
         return ''
     try:
         if isinstance(date_obj, str):
@@ -37,7 +44,7 @@ def to_persian_date(date_obj):
 
 def format_price_persian(price):
     """فرمت قیمت به تومان با اعداد فارسی"""
-    if price is None or price == '' or price != price:  # بررسی NaN
+    if price is None or price == '' or price != price:
         return '۰ تومان'
     try:
         price_int = int(float(price))
@@ -46,11 +53,12 @@ def format_price_persian(price):
         return str(price)
 
 # ============================================
-# تنظیمات هویتی هتل (بر اساس وب‌سایت)
+# تنظیمات هویتی هتل با لوگو
 # ============================================
 HOTEL_CONFIG = {
     "name": "بوتیک هتل محلاتی",
     "logo_url": "https://www.hotelmahalati.com/images/logo.png",
+    "logo_text": "🏛️",
     "rooms": [
         {"name": "ترنج", "price": 8500000},
         {"name": "پریدخت", "price": 9112000},
@@ -74,7 +82,7 @@ HOTEL_CONFIG = {
 }
 
 # ============================================
-# تنظیمات صفحه
+# تنظیمات صفحه با لوگو
 # ============================================
 st.set_page_config(
     page_title=f"🏨 {HOTEL_CONFIG['name']} - داشبورد مدیریت",
@@ -99,6 +107,16 @@ st.markdown(f"""
         text-align: center;
         margin-bottom: 25px;
         border-right: 6px solid {HOTEL_CONFIG['colors']['accent']};
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 20px;
+    }}
+    .hotel-header img {{
+        height: 60px;
+        border-radius: 10px;
+        background: white;
+        padding: 5px;
     }}
     .hotel-header h1, .hotel-header h2, .hotel-header p {{
         color: white !important;
@@ -110,6 +128,15 @@ st.markdown(f"""
         border-radius: 10px;
         box-shadow: 0 2px 8px rgba(0,0,0,0.08);
         border-right: 4px solid {HOTEL_CONFIG['colors']['accent']};
+    }}
+    .stMetric label {{
+        color: {HOTEL_CONFIG['colors']['text']} !important;
+        font-weight: bold;
+    }}
+    .stMetric div {{
+        color: {HOTEL_CONFIG['colors']['primary']} !important;
+        font-size: 28px !important;
+        font-weight: bold;
     }}
     .stButton>button {{
         background: {HOTEL_CONFIG['colors']['secondary']};
@@ -125,13 +152,22 @@ st.markdown(f"""
         transform: scale(1.03);
         box-shadow: 0 4px 12px rgba(11,122,117,0.3);
     }}
-    .info-box {{
-        background-color: white;
-        padding: 15px;
-        border-radius: 10px;
-        border-right: 4px solid {HOTEL_CONFIG['colors']['secondary']};
-        box-shadow: 0 2px 6px rgba(0,0,0,0.05);
-        margin: 10px 0;
+    .prediction-box {{
+        background: linear-gradient(135deg, #E8F5E9, #C8E6C9);
+        padding: 20px;
+        border-radius: 12px;
+        border-right: 6px solid #2E7D32;
+        margin: 15px 0;
+        text-align: center;
+    }}
+    .prediction-box h3 {{
+        color: #1B5E20;
+        margin: 0;
+    }}
+    .prediction-box .number {{
+        font-size: 32px;
+        font-weight: bold;
+        color: #0B7A75;
     }}
 </style>
 """, unsafe_allow_html=True)
@@ -146,21 +182,20 @@ def generate_realistic_data():
         os.makedirs('data')
     
     first_names = ['احمد', 'سارا', 'محمد', 'زهرا', 'علی', 'مریم', 'رضا', 'فاطمه', 
-                   'حسین', 'نگار', 'کیان', 'نازنین', 'امیر', 'سپیده', 'مهدی', 'الهه',
-                   'پویا', 'شیرین', 'نیما', 'ترانه', 'آرمان', 'سودابه', 'بابک', 'گلناز']
+                   'حسین', 'نگار', 'کیان', 'نازنین', 'امیر', 'سپیده', 'مهدی', 'الهه']
     last_names = ['محلاتی', 'کریمی', 'حسینی', 'رضوی', 'نوری', 'یزدی', 'شیرازی', 
-                  'کاشانی', 'اصفهانی', 'تبریزی', 'فردوسی', 'سهرابی', 'مهرآور', 'شفیعی']
+                  'کاشانی', 'اصفهانی', 'تبریزی', 'فردوسی', 'سهرابی']
     cities = ['تهران', 'شیراز', 'اصفهان', 'مشهد', 'تبریز', 'یزد', 'کاشان', 'کرمان']
     art_preferences = ['نقاشی', 'معماری', 'شعر', 'موسیقی', 'تاریخ', 'خوشنویسی', 'مینیاتور']
     channels = ['وب‌سایت', 'بوکینگ', 'اینستاگرام', 'تلفن', 'حضوری']
     
     end_date = datetime.now()
-    start_date = end_date - timedelta(days=180)
+    start_date = end_date - timedelta(days=365)  # یک سال داده برای پیش‌بینی بهتر
     date_range = pd.date_range(start=start_date, end=end_date, freq='D')
     
     # ---- تولید مهمانان ----
     guests = []
-    for i in range(250):
+    for i in range(300):
         guest = {
             'guest_id': f'G{1000+i}',
             'نام': random.choice(first_names),
@@ -168,7 +203,7 @@ def generate_realistic_data():
             'شماره_تماس': f'0912{random.randint(1000000, 9999999)}',
             'شهر': random.choice(cities),
             'تاریخ_اولین_اقامت': random.choice(date_range).strftime('%Y-%m-%d'),
-            'تعداد_اقامت': random.randint(1, 8),
+            'تعداد_اقامت': random.randint(1, 10),
             'علاقه_هنری': random.choice(art_preferences),
             'امتیاز_وفاداری': round(random.uniform(0, 100), 1)
         }
@@ -176,10 +211,10 @@ def generate_realistic_data():
     guests_df = pd.DataFrame(guests)
     guests_df.to_csv('data/guests.csv', index=False, encoding='utf-8-sig')
     
-    # ---- تولید رزرو ----
+    # ---- تولید رزرو با داده‌های بیشتر برای پیش‌بینی ----
     reservations = []
     room_names = [room['name'] for room in HOTEL_CONFIG['rooms']]
-    for i in range(500):
+    for i in range(800):
         check_in = random.choice(date_range)
         stay_days = random.randint(1, 4)
         check_out = check_in + timedelta(days=stay_days)
@@ -188,7 +223,7 @@ def generate_realistic_data():
         
         reservation = {
             'شناسه_رزرو': f'R{10000+i}',
-            'شناسه_مهمان': f'G{random.randint(1000, 1249)}',
+            'شناسه_مهمان': f'G{random.randint(1000, 1299)}',
             'تاریخ_ورود': check_in.strftime('%Y-%m-%d'),
             'تاریخ_خروج': check_out.strftime('%Y-%m-%d'),
             'اتاق': room,
@@ -213,7 +248,7 @@ def generate_realistic_data():
         ('کارگاه نقاشی روی سفال', 'هنرهای تجسمی', 30, 15)
     ]
     
-    for i in range(30):
+    for i in range(40):
         event_date = random.choice(date_range)
         template = random.choice(event_templates)
         event = {
@@ -251,6 +286,123 @@ def save_data(guests_df, reservations_df, events_df):
     guests_df.to_csv('data/guests.csv', index=False, encoding='utf-8-sig')
     reservations_df.to_csv('data/reservations.csv', index=False, encoding='utf-8-sig')
     events_df.to_csv('data/events.csv', index=False, encoding='utf-8-sig')
+
+# ============================================
+# توابع پیش‌بینی (جدید)
+# ============================================
+
+def predict_occupancy(reservations_df, days_ahead=30):
+    """پیش‌بینی نرخ اشغال برای روزهای آینده"""
+    if reservations_df.empty:
+        return None, None
+    
+    completed = reservations_df[reservations_df['وضعیت'] == 'تکمیل‌شده'].copy()
+    if completed.empty:
+        return None, None
+    
+    # آماده‌سازی داده‌ها
+    completed['تاریخ_ورود'] = pd.to_datetime(completed['تاریخ_ورود'])
+    daily_occupancy = completed.groupby('تاریخ_ورود').size().reset_index()
+    daily_occupancy.columns = ['تاریخ', 'تعداد']
+    
+    # ایجاد ویژگی‌های زمانی
+    daily_occupancy['روز_هفته'] = daily_occupancy['تاریخ'].dt.dayofweek
+    daily_occupancy['ماه'] = daily_occupancy['تاریخ'].dt.month
+    daily_occupancy['روز_ماه'] = daily_occupancy['تاریخ'].dt.day
+    
+    # ایجاد داده‌های تاریخی
+    days = np.array(range(len(daily_occupancy))).reshape(-1, 1)
+    X = days
+    y = daily_occupancy['تعداد'].values
+    
+    # آموزش مدل
+    try:
+        model = LinearRegression()
+        model.fit(X, y)
+        
+        # پیش‌بینی روزهای آینده
+        last_day = len(daily_occupancy)
+        future_days = np.array(range(last_day, last_day + days_ahead)).reshape(-1, 1)
+        predictions = model.predict(future_days)
+        
+        # ایجاد تاریخ‌های آینده
+        last_date = daily_occupancy['تاریخ'].max()
+        future_dates = [last_date + timedelta(days=i+1) for i in range(days_ahead)]
+        
+        # حداقل ۰ و حداکثر ظرفیت هتل (۱۰ اتاق)
+        predictions = np.maximum(predictions, 0)
+        predictions = np.minimum(predictions, 10)
+        
+        # میانگین پیش‌بینی
+        avg_prediction = np.mean(predictions)
+        
+        # پیش‌بینی ADR
+        avg_adr = completed['قیمت_هر_شب'].mean()
+        predicted_revenue = avg_prediction * avg_adr * 30  # تخمین درآمد ماهانه
+        
+        return {
+            'avg_occupancy': avg_prediction,
+            'predicted_revenue': predicted_revenue,
+            'trend': 'صعودی' if predictions[-1] > predictions[0] else 'نزولی',
+            'future_dates': future_dates,
+            'predictions': predictions,
+            'daily_occupancy': daily_occupancy
+        }
+    except:
+        return None, None
+
+def predict_guest_growth(guests_df, months_ahead=3):
+    """پیش‌بینی رشد تعداد مهمانان"""
+    if guests_df.empty:
+        return None
+    
+    guests_df_copy = guests_df.copy()
+    guests_df_copy['تاریخ_اولین_اقامت'] = pd.to_datetime(guests_df_copy['تاریخ_اولین_اقامت'])
+    monthly_new = guests_df_copy.groupby(guests_df_copy['تاریخ_اولین_اقامت'].dt.to_period('M')).size().reset_index()
+    monthly_new.columns = ['ماه', 'تعداد']
+    
+    if len(monthly_new) < 3:
+        return None
+    
+    X = np.array(range(len(monthly_new))).reshape(-1, 1)
+    y = monthly_new['تعداد'].values
+    
+    try:
+        model = LinearRegression()
+        model.fit(X, y)
+        
+        last_idx = len(monthly_new)
+        future_idx = np.array(range(last_idx, last_idx + months_ahead)).reshape(-1, 1)
+        predictions = model.predict(future_idx)
+        predictions = np.maximum(predictions, 0)
+        
+        return {
+            'avg_monthly_growth': np.mean(predictions),
+            'total_new_guests': int(np.sum(predictions)),
+            'trend': 'صعودی' if predictions[-1] > predictions[0] else 'نزولی'
+        }
+    except:
+        return None
+
+def predict_events_success(events_df):
+    """پیش‌بینی موفقیت ایونت‌های آینده"""
+    if events_df.empty:
+        return None
+    
+    # تحلیل ایونت‌های گذشته
+    events_copy = events_df.copy()
+    events_copy['درصد_پر_شدن'] = (events_copy['ثبت_نام'] / events_copy['ظرفیت']) * 100
+    
+    avg_success = events_copy['درصد_پر_شدن'].mean()
+    
+    # دسته‌بندی موفق‌ترین ایونت‌ها
+    best_category = events_copy.groupby('دسته_بندی')['درصد_پر_شدن'].mean().idxmax()
+    
+    return {
+        'avg_success_rate': avg_success,
+        'best_category': best_category,
+        'recommendation': f'برگزاری ایونت‌های {best_category} با استقبال بیشتری همراه است'
+    }
 
 # ============================================
 # توابع محاسباتی و تحلیلی
@@ -403,6 +555,45 @@ def plot_event_revenue(events_df, reservations_df):
                  orientation='h')
     fig.update_traces(texttemplate='%{x:,.0f}', textposition='outside')
     fig.update_layout(xaxis_title='درآمد (هزار تومان)', yaxis_title='ایونت')
+    return fig
+
+def plot_prediction_chart(prediction_data):
+    """نمودار پیش‌بینی اشغال"""
+    if prediction_data is None:
+        return None
+    
+    fig = go.Figure()
+    
+    # داده‌های تاریخی
+    historical = prediction_data['daily_occupancy']
+    fig.add_trace(go.Scatter(
+        x=historical['تاریخ'],
+        y=historical['تعداد'],
+        mode='lines+markers',
+        name='داده‌های تاریخی',
+        line=dict(color=HOTEL_CONFIG['colors']['primary'], width=2)
+    ))
+    
+    # پیش‌بینی‌ها
+    future_dates = prediction_data['future_dates']
+    predictions = prediction_data['predictions']
+    fig.add_trace(go.Scatter(
+        x=future_dates,
+        y=predictions,
+        mode='lines+markers',
+        name='پیش‌بینی',
+        line=dict(color='#FF6B6B', width=3, dash='dash'),
+        marker=dict(size=8)
+    ))
+    
+    fig.update_layout(
+        title='پیش‌بینی نرخ اشغال هتل',
+        xaxis_title='تاریخ',
+        yaxis_title='تعداد رزرو',
+        height=400,
+        hovermode='x'
+    )
+    
     return fig
 
 # ============================================
@@ -579,27 +770,35 @@ def management_section(guests_df, reservations_df, events_df):
     return guests_df, reservations_df, events_df
 
 # ============================================
-# بخش تحلیل و گزارش
+# بخش تحلیل و گزارش با پیش‌بینی‌ها
 # ============================================
 
 def analytics_section(guests_df, reservations_df, events_df):
-    st.header("📊 تحلیل‌های هوشمند")
+    st.header("📊 تحلیل‌های هوشمند و پیش‌بینی‌ها")
     
+    # هدر با لوگو
     st.markdown(f"""
     <div class="hotel-header">
-        <h1>🏛️ {HOTEL_CONFIG['name']}</h1>
-        <p style="font-size: 16px; opacity: 0.9;">تحلیل‌های عملیاتی بر اساس هنر، تاریخ و معماری</p>
+        <img src="{HOTEL_CONFIG['logo_url']}" alt="لوگو هتل" onerror="this.style.display='none'">
+        <div>
+            <h1>🏛️ {HOTEL_CONFIG['name']}</h1>
+            <p style="font-size: 16px; opacity: 0.9;">تحلیل‌های عملیاتی و پیش‌بینی‌های هوشمند</p>
+        </div>
     </div>
     """, unsafe_allow_html=True)
     
+    # ===== KPIها با اعداد دقیق =====
     kpis = calculate_kpis(guests_df, reservations_df, events_df)
+    
     col1, col2, col3, col4, col5, col6 = st.columns(6)
     with col1:
         st.metric("👥 مهمانان", to_persian_number(kpis['total_guests']))
     with col2:
         st.metric("📈 نرخ اشغال", f"{to_persian_number(f'{kpis['occupancy']:.1f}')}%")
     with col3:
-        st.metric("💰 ADR", f"{to_persian_number(f'{kpis['adr']/10000:,.0f}')} هزار تومان")
+        # ADR با عدد دقیق (بدون سه خط)
+        adr_value = kpis['adr']
+        st.metric("💰 ADR", f"{to_persian_number(f'{adr_value:,.0f}')} تومان")
     with col4:
         st.metric("🏠 اتاق محبوب", kpis['popular_room'])
     with col5:
@@ -609,6 +808,68 @@ def analytics_section(guests_df, reservations_df, events_df):
     
     st.markdown("---")
     
+    # ===== بخش پیش‌بینی‌ها =====
+    st.subheader("🔮 پیش‌بینی‌های هوشمند")
+    
+    # پیش‌بینی اشغال
+    occupancy_pred = predict_occupancy(reservations_df, days_ahead=30)
+    
+    col1, col2, col3 = st.columns(3)
+    
+    if occupancy_pred:
+        with col1:
+            st.markdown(f"""
+            <div class="prediction-box">
+                <h3>📊 پیش‌بینی اشغال</h3>
+                <div class="number">{to_persian_number(f'{occupancy_pred["avg_occupancy"]:.1f}')}</div>
+                <p>میانگین رزرو در ۳۰ روز آینده</p>
+                <p style="color: {'#2E7D32' if occupancy_pred['trend'] == 'صعودی' else '#C62828'}">
+                    روند: {occupancy_pred['trend']}
+                </p>
+            </div>
+            """, unsafe_allow_html=True)
+        
+        with col2:
+            st.markdown(f"""
+            <div class="prediction-box" style="background: linear-gradient(135deg, #E3F2FD, #BBDEFB); border-right-color: #1565C0;">
+                <h3>💰 پیش‌بینی درآمد</h3>
+                <div class="number" style="color: #1565C0;">{to_persian_number(f'{occupancy_pred["predicted_revenue"]/1000000:.1f}')}</div>
+                <p>میلیون تومان درآمد تخمینی ماه آینده</p>
+            </div>
+            """, unsafe_allow_html=True)
+    
+    # پیش‌بینی رشد مهمانان
+    guest_pred = predict_guest_growth(guests_df, months_ahead=3)
+    if guest_pred:
+        with col3:
+            st.markdown(f"""
+            <div class="prediction-box" style="background: linear-gradient(135deg, #FFF3E0, #FFE0B2); border-right-color: #E65100;">
+                <h3>👥 پیش‌بینی رشد</h3>
+                <div class="number" style="color: #E65100;">{to_persian_number(guest_pred['total_new_guests'])}</div>
+                <p>تخمین مهمانان جدید در ۳ ماه آینده</p>
+                <p style="color: {'#2E7D32' if guest_pred['trend'] == 'صعودی' else '#C62828'}">
+                    روند: {guest_pred['trend']}
+                </p>
+            </div>
+            """, unsafe_allow_html=True)
+    
+    # نمودار پیش‌بینی اشغال
+    if occupancy_pred:
+        st.plotly_chart(plot_prediction_chart(occupancy_pred), use_container_width=True)
+    
+    # پیش‌بینی ایونت‌ها
+    event_pred = predict_events_success(events_df)
+    if event_pred:
+        st.info(f"""
+        **🎭 پیش‌بینی ایونت‌ها:**
+        - میانگین موفقیت ایونت‌ها: {to_persian_number(f'{event_pred["avg_success_rate"]:.1f}')}%
+        - بهترین دسته‌بندی: {event_pred['best_category']}
+        - توصیه: {event_pred['recommendation']}
+        """)
+    
+    st.markdown("---")
+    
+    # ===== تحلیل‌های معمول =====
     st.subheader("👥 تحلیل مهمانان")
     col1, col2 = st.columns(2)
     with col1:
@@ -673,6 +934,9 @@ def main():
         st.caption(f"👥 {to_persian_number(len(guests_df))} مهمان")
         st.caption(f"🏠 {to_persian_number(len(reservations_df))} رزرو")
         st.caption(f"🎭 {to_persian_number(len(events_df))} ایونت")
+        
+        st.markdown("---")
+        st.caption("🔮 با پیش‌بینی‌های هوشمند")
     
     if menu == "📊 تحلیل و گزارش":
         analytics_section(guests_df, reservations_df, events_df)
