@@ -44,7 +44,7 @@ HOTEL_CONFIG = {
 }
 
 # ============================================
-# توابع تاریخ و مناسبت‌ها
+# توابع تاریخ و مناسبت‌ها (با API)
 # ============================================
 
 def get_persian_date():
@@ -52,16 +52,16 @@ def get_persian_date():
     now = datetime.now()
     persian = jdatetime.datetime.fromgregorian(datetime=now)
     days = ['یک‌شنبه', 'دوشنبه', 'سه‌شنبه', 'چهارشنبه', 'پنج‌شنبه', 'جمعه', 'شنبه']
+    months = ['فروردین', 'اردیبهشت', 'خرداد', 'تیر', 'مرداد', 'شهریور', 'مهر', 'آبان', 'آذر', 'دی', 'بهمن', 'اسفند']
     return {
-        'jalali': f"{days[persian.weekday()]} {persian.day} {['فروردین','اردیبهشت','خرداد','تیر','مرداد','شهریور','مهر','آبان','آذر','دی','بهمن','اسفند'][persian.month-1]} {persian.year}",
+        'jalali': f"{days[persian.weekday()]} {persian.day} {months[persian.month-1]} {persian.year}",
         'gregorian': now.strftime("%A, %B %d, %Y"),
         'hijri': get_hijri_date(now)
     }
 
 def get_hijri_date(date_obj):
-    """گرفتن تاریخ قمری (با استفاده از API)"""
+    """گرفتن تاریخ قمری با API"""
     try:
-        # استفاده از API رایگان برای تبدیل تاریخ
         url = f"https://api.aladhan.com/v1/gToH/{date_obj.year}/{date_obj.month}/{date_obj.day}"
         response = requests.get(url, timeout=5)
         if response.status_code == 200:
@@ -74,19 +74,41 @@ def get_hijri_date(date_obj):
     return "تاریخ قمری در دسترس نیست"
 
 def get_event_of_day():
-    """گرفتن مناسبت روز (با استفاده از API)"""
+    """گرفتن مناسبت روز با API"""
     try:
-        # API رایگان برای مناسبت‌های ایرانی
+        # استفاده از API رایگان برای مناسبت‌ها
         url = "https://api.parsijoo.ir/events/today"
         response = requests.get(url, timeout=5)
         if response.status_code == 200:
             data = response.json()
             if data and 'events' in data:
                 events = data['events']
-                return " - ".join(events[:2])  # حداکثر ۲ مناسبت
+                return " - ".join(events[:2])
     except:
         pass
-    return ""
+    # اگر API کار نکرد، مناسبت‌های ثابت
+    return get_fallback_event()
+
+def get_fallback_event():
+    """مناسبت‌های ثابت در صورت عدم دسترسی به API"""
+    now = datetime.now()
+    persian = jdatetime.datetime.fromgregorian(datetime=now)
+    month = persian.month
+    day = persian.day
+    
+    # مناسبت‌های مهم (مختصر)
+    events = {
+        (1, 1): "جشن نوروز",
+        (1, 13): "روز طبیعت",
+        (2, 25): "روز فردوسی",
+        (3, 1): "روز خرداد",
+        (4, 14): "تولد امام رضا (ع)",
+        (6, 21): "روز شعر و ادب فارسی",
+        (7, 7): "تولد حافظ",
+        (10, 15): "روز سعدی"
+    }
+    
+    return events.get((month, day), "")
 
 # ============================================
 # توابع کمکی برای تبدیل تاریخ و اعداد
@@ -151,10 +173,10 @@ st.markdown(f"""
         font-family: 'Vazir', sans-serif;
     }}
     
-    /* هدر با لوگو و تاریخ */
+    /* هدر با تاریخ و مناسبت */
     .custom-header {{
         background: linear-gradient(135deg, {HOTEL_CONFIG['colors']['primary']}, {HOTEL_CONFIG['colors']['secondary']});
-        padding: 15px 25px;
+        padding: 18px 25px;
         border-radius: 12px;
         color: white;
         margin-bottom: 25px;
@@ -163,36 +185,31 @@ st.markdown(f"""
         align-items: center;
         border-right: 6px solid {HOTEL_CONFIG['colors']['accent']};
     }}
-    .custom-header .title-section {{
-        display: flex;
-        align-items: center;
-        gap: 15px;
-    }}
-    .custom-header .title-section img {{
-        height: 50px;
-        border-radius: 8px;
-        background: white;
-        padding: 5px;
-    }}
     .custom-header .title-section h1 {{
         color: white;
         margin: 0;
-        font-size: 22px;
+        font-size: 26px;
+        font-weight: bold;
     }}
     .custom-header .title-section p {{
-        color: rgba(255,255,255,0.9);
-        margin: 0;
+        color: rgba(255,255,255,0.85);
+        margin: 5px 0 0 0;
         font-size: 14px;
     }}
     .custom-header .date-section {{
         text-align: left;
         font-size: 13px;
         color: rgba(255,255,255,0.95);
-        line-height: 1.6;
+        line-height: 1.8;
+        background: rgba(0,0,0,0.15);
+        padding: 8px 15px;
+        border-radius: 8px;
+        min-width: 200px;
     }}
     .custom-header .date-section .event {{
         color: {HOTEL_CONFIG['colors']['accent']};
         font-weight: bold;
+        font-size: 14px;
     }}
     
     /* استایل متریک‌ها */
@@ -260,21 +277,33 @@ st.markdown(f"""
     .delete-btn:hover {{
         background: #c82333 !important;
     }}
+    
+    /* سایدبار با لوگو */
+    .sidebar-logo {{
+        text-align: center;
+        padding: 15px 0;
+        background: linear-gradient(135deg, {HOTEL_CONFIG['colors']['primary']}, {HOTEL_CONFIG['colors']['secondary']});
+        border-radius: 10px;
+        margin-bottom: 20px;
+    }}
+    .sidebar-logo img {{
+        height: 70px;
+        border-radius: 10px;
+        background: white;
+        padding: 5px;
+    }}
 </style>
 """, unsafe_allow_html=True)
 
 # ============================================
-# نمایش هدر سفارشی با لوگو و تاریخ
+# نمایش هدر سفارشی با تاریخ و مناسبت
 # ============================================
 
 st.markdown(f"""
 <div class="custom-header">
     <div class="title-section">
-        <img src="{HOTEL_CONFIG['logo_url']}" alt="لوگو هتل" onerror="this.style.display='none'">
-        <div>
-            <h1>🏨 داشبورد حرفه‌ای مدیریت هتل</h1>
-            <p>{HOTEL_CONFIG['name']} - شیراز</p>
-        </div>
+        <h1>🏛️ داشبورد حرفه‌ای مدیریت بوتیک هتل محلاتی شیراز</h1>
+        <p>سیستم مدیریت هوشمند اقامتگاه</p>
     </div>
     <div class="date-section">
         <div>📅 {date_info['jalali']}</div>
@@ -680,7 +709,6 @@ def management_section(guests_df, reservations_df, events_df):
     with tab1:
         st.subheader("👤 مدیریت مهمانان")
         
-        # دکمه حذف همه
         col1, col2 = st.columns([3, 1])
         with col2:
             if st.button("🗑️ حذف همه مهمانان", type="secondary"):
@@ -689,7 +717,6 @@ def management_section(guests_df, reservations_df, events_df):
                 st.success("✅ همه مهمانان حذف شدند!")
                 st.rerun()
         
-        # نمایش جدول با دکمه حذف
         display_guests = guests_df.copy()
         if 'تاریخ_اولین_اقامت' in display_guests.columns:
             display_guests['تاریخ_اولین_اقامت'] = display_guests['تاریخ_اولین_اقامت'].apply(
@@ -700,7 +727,6 @@ def management_section(guests_df, reservations_df, events_df):
         if 'شماره_تماس' in display_guests.columns:
             display_guests['شماره_تماس'] = display_guests['شماره_تماس'].apply(to_persian_number)
         
-        # اضافه کردن ستون عملیات
         if not display_guests.empty and 'guest_id' in display_guests.columns:
             for idx, row in display_guests.iterrows():
                 col1, col2 = st.columns([10, 1])
@@ -714,7 +740,6 @@ def management_section(guests_df, reservations_df, events_df):
         
         st.dataframe(display_guests, use_container_width=True, hide_index=True)
         
-        # فرم افزودن مهمان
         with st.expander("➕ افزودن مهمان جدید"):
             with st.form("add_guest"):
                 col1, col2 = st.columns(2)
@@ -932,13 +957,11 @@ def management_section(guests_df, reservations_df, events_df):
         
         if uploaded_file is not None:
             try:
-                # خواندن فایل
                 if uploaded_file.name.endswith('.csv'):
                     new_guests = pd.read_csv(uploaded_file, encoding='utf-8-sig')
                 else:
                     new_guests = pd.read_excel(uploaded_file)
                 
-                # نمایش پیش‌نمایش
                 st.subheader("📋 پیش‌نمایش داده‌های آپلود شده")
                 st.dataframe(new_guests.head(10), use_container_width=True)
                 
@@ -947,7 +970,6 @@ def management_section(guests_df, reservations_df, events_df):
                     st.write(f"**تعداد رکوردها:** {len(new_guests)}")
                 with col2:
                     if st.button("✅ افزودن به داده‌های هتل", use_container_width=True):
-                        # بررسی ستون‌های مورد نیاز
                         required_cols = ['نام', 'نام_خانوادگی', 'شماره_تماس']
                         missing_cols = [col for col in required_cols if col not in new_guests.columns]
                         
@@ -955,11 +977,9 @@ def management_section(guests_df, reservations_df, events_df):
                             st.error(f"❌ ستون‌های زیر در فایل وجود ندارند: {', '.join(missing_cols)}")
                             st.info("لطفاً فایل را با ستون‌های صحیح آماده کنید.")
                         else:
-                            # اضافه کردن شناسه
                             start_id = len(guests_df) + 1000
                             new_guests['guest_id'] = [f'G{start_id + i}' for i in range(len(new_guests))]
                             
-                            # پر کردن ستون‌های پیش‌فرض
                             if 'شهر' not in new_guests.columns:
                                 new_guests['شهر'] = 'شیراز'
                             if 'علاقه_هنری' not in new_guests.columns:
@@ -971,7 +991,6 @@ def management_section(guests_df, reservations_df, events_df):
                             if 'امتیاز_وفاداری' not in new_guests.columns:
                                 new_guests['امتیاز_وفاداری'] = 50.0
                             
-                            # افزودن به DataFrame اصلی
                             guests_df_updated = pd.concat([guests_df, new_guests], ignore_index=True)
                             save_data(guests_df_updated, reservations_df, events_df)
                             
@@ -1114,14 +1133,11 @@ def main():
             st.error("❌ خطای جدی در بارگذاری داده. لطفاً پوشه data را بررسی کنید.")
             st.stop()
     
-    # سایدبار
+    # سایدبار با لوگو (بدون نام و آدرس)
     with st.sidebar:
         st.markdown(f"""
-        <div style="text-align: center; padding: 15px 0; background: linear-gradient(135deg, {HOTEL_CONFIG['colors']['primary']}, {HOTEL_CONFIG['colors']['secondary']}); 
-                    border-radius: 10px; margin-bottom: 20px;">
-            <h2 style="color: #FFFFFF; margin: 0;">🏨 بوتیک هتل</h2>
-            <h3 style="color: {HOTEL_CONFIG['colors']['accent']}; margin: 0;">محلاتی</h3>
-            <p style="color: #F5DEB3; font-size: 12px;">شیراز - خیابان محلاتی</p>
+        <div class="sidebar-logo">
+            <img src="{HOTEL_CONFIG['logo_url']}" alt="لوگو هتل" onerror="this.style.display='none'">
         </div>
         """, unsafe_allow_html=True)
         
