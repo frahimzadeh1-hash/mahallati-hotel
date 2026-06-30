@@ -43,15 +43,20 @@ HOTEL_CONFIG = {
     "event_categories": ["موسیقی", "شعر", "هنرهای تجسمی", "تاریخ و معماری", "خوشنویسی"]
 }
 
+import jdatetime
+import requests
+from datetime import datetime
+import json
+
 # ============================================
-# توابع تاریخ و مناسبت‌ها
+# توابع تاریخ و مناسبت‌ها (با APIهای جایگزین)
 # ============================================
 
 def get_persian_date():
-    """گرفتن تاریخ شمسی با فرمت صحیح"""
+    """گرفتن تاریخ شمسی، میلادی و قمری"""
     now = datetime.now()
     
-    # تبدیل به تاریخ شمسی با استفاده از date=now
+    # تبدیل به تاریخ شمسی
     persian = jdatetime.datetime.fromgregorian(date=now)
     
     days = ['شنبه', 'یک‌شنبه', 'دوشنبه', 'سه‌شنبه', 'چهارشنبه', 'پنج‌شنبه', 'جمعه']
@@ -61,14 +66,16 @@ def get_persian_date():
     return {
         'jalali': f"{days[persian.weekday()]} {persian.day} {months[persian.month-1]} {persian.year}",
         'gregorian': now.strftime("%A, %B %d, %Y"),
-        'hijri': get_hijri_date(now)
+        'hijri': get_hijri_date(now),
+        'event': get_event_of_day()
     }
 
 def get_hijri_date(date_obj):
-    """گرفتن تاریخ قمری با API"""
+    """گرفتن تاریخ قمری با API جایگزین"""
     try:
+        # API جایگزین 1: Aladhan (با timeout بیشتر)
         url = f"https://api.aladhan.com/v1/gToH/{date_obj.year}/{date_obj.month}/{date_obj.day}"
-        response = requests.get(url, timeout=5)
+        response = requests.get(url, timeout=10)
         if response.status_code == 200:
             data = response.json()
             if data['code'] == 200:
@@ -76,41 +83,139 @@ def get_hijri_date(date_obj):
                 return f"{hijri['day']} {hijri['month']['en']} {hijri['year']} هجری قمری"
     except:
         pass
-    return "تاریخ قمری در دسترس نیست"
+    
+    try:
+        # API جایگزین 2: api.hijri-date.com
+        url = f"https://api.hijri-date.com/convert?date={date_obj.year}-{date_obj.month:02d}-{date_obj.day:02d}"
+        response = requests.get(url, timeout=10)
+        if response.status_code == 200:
+            data = response.json()
+            if data and 'hijri' in data:
+                hijri = data['hijri']
+                return f"{hijri['day']} {hijri['month_name']} {hijri['year']} هجری قمری"
+    except:
+        pass
+    
+    # در صورت عدم موفقیت، از محاسبه دستی استفاده کن
+    return get_hijri_fallback(date_obj)
+
+def get_hijri_fallback(date_obj):
+    """محاسبه دستی تاریخ قمری (تخمینی)"""
+    try:
+        # تبدیل به تاریخ شمسی
+        persian = jdatetime.datetime.fromgregorian(date=date_obj)
+        month = persian.month
+        day = persian.day
+        year = persian.year - 621  # تقریب ساده
+        
+        # ماه‌های قمری
+        hijri_months = ['محرم', 'صفر', 'ربیع‌الاول', 'ربیع‌الثانی', 
+                        'جمادی‌الاول', 'جمادی‌الثانی', 'رجب', 'شعبان', 
+                        'رمضان', 'شوال', 'ذی‌القعده', 'ذی‌الحجه']
+        
+        # تقریب ساده (ماه و روز با کمی اختلاف)
+        hijri_month = (month + 2) % 12
+        hijri_day = (day + 10) % 30
+        if hijri_day == 0:
+            hijri_day = 30
+            hijri_month -= 1
+        if hijri_month == 0:
+            hijri_month = 12
+            hijri_year = year - 1
+        else:
+            hijri_year = year
+            
+        return f"{hijri_day} {hijri_months[hijri_month-1]} {hijri_year} هجری قمری (تقریبی)"
+    except:
+        return "تاریخ قمری در دسترس نیست"
 
 def get_event_of_day():
-    """گرفتن مناسبت روز با API"""
+    """گرفتن مناسبت روز با API جایگزین"""
+    # API جایگزین 1: parsijoo
     try:
         url = "https://api.parsijoo.ir/events/today"
-        response = requests.get(url, timeout=5)
+        response = requests.get(url, timeout=10)
         if response.status_code == 200:
             data = response.json()
             if data and 'events' in data:
                 events = data['events']
-                return " - ".join(events[:2])
+                if isinstance(events, list):
+                    return " - ".join(events[:2])
     except:
         pass
+    
+    # API جایگزین 2: irandate
+    try:
+        url = "https://api.irandate.ir/events/today"
+        response = requests.get(url, timeout=10)
+        if response.status_code == 200:
+            data = response.json()
+            if data and 'events' in data:
+                events = data['events']
+                if isinstance(events, list):
+                    return " - ".join(events[:2])
+    except:
+        pass
+    
+    # API جایگزین 3: gahshomar.com
+    try:
+        now = datetime.now()
+        persian = jdatetime.datetime.fromgregorian(date=now)
+        url = f"https://gahshomar.com/api/events/{persian.year}/{persian.month}/{persian.day}"
+        response = requests.get(url, timeout=10)
+        if response.status_code == 200:
+            data = response.json()
+            if data and 'events' in data:
+                events = data['events']
+                if isinstance(events, list):
+                    return " - ".join(events[:2])
+    except:
+        pass
+    
+    # بازگشت به مناسبت‌های ثابت
     return get_fallback_event()
 
 def get_fallback_event():
-    """مناسبت‌های ثابت در صورت عدم دسترسی به API"""
+    """مناسبت‌های ثابت (در صورت عدم دسترسی به API)"""
     now = datetime.now()
     persian = jdatetime.datetime.fromgregorian(date=now)
     month = persian.month
     day = persian.day
     
+    # مناسبت‌های مهم سال شمسی
     events = {
-        (1, 1): "جشن نوروز",
-        (1, 13): "روز طبیعت",
-        (2, 25): "روز فردوسی",
-        (3, 1): "روز خرداد",
-        (4, 14): "تولد امام رضا (ع)",
-        (6, 21): "روز شعر و ادب فارسی",
-        (7, 7): "تولد حافظ",
-        (10, 15): "روز سعدی"
+        (1, 1): "🎉 جشن نوروز",
+        (1, 4): "🎉 روز طبیعت",
+        (1, 13): "🌿 روز طبیعت",
+        (2, 25): "📚 روز فردوسی",
+        (3, 1): "🌾 روز خرداد",
+        (3, 14): "🌸 تولد امام رضا (ع)",
+        (3, 20): "🌙 شب قدر",
+        (4, 1): "🎉 عید فطر",
+        (4, 14): "🕌 تولد امام رضا (ع)",
+        (5, 1): "🎊 عید قربان",
+        (5, 9): "🎉 عید غدیر خم",
+        (6, 21): "📜 روز شعر و ادب فارسی",
+        (7, 7): "🍷 تولد حافظ",
+        (8, 15): "🌙 شب یلدا",
+        (9, 25): "🕌 شب جمعه",
+        (10, 15): "📖 روز سعدی",
+        (11, 1): "🎉 جشن سده",
+        (11, 15): "🌹 روز شیراز",
+        (12, 29): "🔥 چهارشنبه سوری",
+        (12, 30): "🎉 جشن نوروز"
     }
     
-    return events.get((month, day), "")
+    # چک کردن مناسبت‌ها
+    for (m, d), event in events.items():
+        if m == month and d == day:
+            return event
+    
+    # مناسبت‌های متحرک (مثل جمعه‌ها)
+    if persian.weekday() == 6:  # جمعه
+        return "🕌 روز جمعه (تعطیل)"
+    
+    return ""  # بدون مناسبت
 # ============================================
 # توابع کمکی برای تبدیل تاریخ و اعداد
 # ============================================
@@ -163,8 +268,22 @@ st.set_page_config(
 
 # دریافت تاریخ و مناسبت
 date_info = get_persian_date()
-event_of_day = get_event_of_day()
 
+# نمایش هدر
+st.markdown(f"""
+<div class="custom-header">
+    <div class="title-section">
+        <h1>🏛️ داشبورد حرفه‌ای مدیریت بوتیک هتل محلاتی شیراز</h1>
+        <p>سیستم مدیریت هوشمند اقامتگاه</p>
+    </div>
+    <div class="date-section">
+        <div>📅 {date_info['jalali']}</div>
+        <div style="font-size: 11px; opacity: 0.8;">{date_info['gregorian']}</div>
+        <div style="font-size: 11px; opacity: 0.8;">{date_info['hijri']}</div>
+        {f'<div class="event">🎉 {date_info["event"]}</div>' if date_info["event"] else ''}
+    </div>
+</div>
+""", unsafe_allow_html=True)
 # اعمال استایل هویتی
 st.markdown(f"""
 <style>
