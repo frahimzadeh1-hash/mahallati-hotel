@@ -44,15 +44,20 @@ HOTEL_CONFIG = {
 }
 
 # ============================================
-# توابع تاریخ و مناسبت‌ها (با API)
+# توابع تاریخ و مناسبت‌ها
 # ============================================
 
 def get_persian_date():
-    """گرفتن تاریخ شمسی"""
+    """گرفتن تاریخ شمسی با فرمت صحیح"""
     now = datetime.now()
-    persian = jdatetime.datetime.fromgregorian(datetime=now)
-    days = ['یک‌شنبه', 'دوشنبه', 'سه‌شنبه', 'چهارشنبه', 'پنج‌شنبه', 'جمعه', 'شنبه']
-    months = ['فروردین', 'اردیبهشت', 'خرداد', 'تیر', 'مرداد', 'شهریور', 'مهر', 'آبان', 'آذر', 'دی', 'بهمن', 'اسفند']
+    
+    # تبدیل به تاریخ شمسی با استفاده از date=now
+    persian = jdatetime.datetime.fromgregorian(date=now)
+    
+    days = ['شنبه', 'یک‌شنبه', 'دوشنبه', 'سه‌شنبه', 'چهارشنبه', 'پنج‌شنبه', 'جمعه']
+    months = ['فروردین', 'اردیبهشت', 'خرداد', 'تیر', 'مرداد', 'شهریور', 
+              'مهر', 'آبان', 'آذر', 'دی', 'بهمن', 'اسفند']
+    
     return {
         'jalali': f"{days[persian.weekday()]} {persian.day} {months[persian.month-1]} {persian.year}",
         'gregorian': now.strftime("%A, %B %d, %Y"),
@@ -76,7 +81,6 @@ def get_hijri_date(date_obj):
 def get_event_of_day():
     """گرفتن مناسبت روز با API"""
     try:
-        # استفاده از API رایگان برای مناسبت‌ها
         url = "https://api.parsijoo.ir/events/today"
         response = requests.get(url, timeout=5)
         if response.status_code == 200:
@@ -86,17 +90,15 @@ def get_event_of_day():
                 return " - ".join(events[:2])
     except:
         pass
-    # اگر API کار نکرد، مناسبت‌های ثابت
     return get_fallback_event()
 
 def get_fallback_event():
     """مناسبت‌های ثابت در صورت عدم دسترسی به API"""
     now = datetime.now()
-    persian = jdatetime.datetime.fromgregorian(datetime=now)
+    persian = jdatetime.datetime.fromgregorian(date=now)
     month = persian.month
     day = persian.day
     
-    # مناسبت‌های مهم (مختصر)
     events = {
         (1, 1): "جشن نوروز",
         (1, 13): "روز طبیعت",
@@ -109,7 +111,6 @@ def get_fallback_event():
     }
     
     return events.get((month, day), "")
-
 # ============================================
 # توابع کمکی برای تبدیل تاریخ و اعداد
 # ============================================
