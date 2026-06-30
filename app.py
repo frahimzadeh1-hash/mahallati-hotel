@@ -15,6 +15,16 @@ import requests
 import json
 
 # ============================================
+# تنظیمات صفحه - فقط یک بار و در ابتدا
+# ============================================
+st.set_page_config(
+    page_title="🏨 بوتیک هتل محلاتی - داشبورد مدیریت",
+    page_icon="🏛️",
+    layout="wide",
+    initial_sidebar_state="expanded"
+)
+
+# ============================================
 # تنظیمات هویتی هتل
 # ============================================
 HOTEL_CONFIG = {
@@ -43,13 +53,8 @@ HOTEL_CONFIG = {
     "event_categories": ["موسیقی", "شعر", "هنرهای تجسمی", "تاریخ و معماری", "خوشنویسی"]
 }
 
-import jdatetime
-import requests
-from datetime import datetime
-import json
-
 # ============================================
-# دریافت تاریخ و مناسبت‌ها
+# توابع تاریخ و مناسبت‌ها
 # ============================================
 
 def get_persian_date():
@@ -159,34 +164,6 @@ def get_fallback_event():
     return ""
 
 # ============================================
-# دریافت تاریخ و نمایش هدر
-# ============================================
-
-# دریافت تاریخ و مناسبت
-date_info = get_persian_date()
-
-# استخراج متغیرها
-jalali_date = date_info['jalali']
-gregorian_date = date_info['gregorian']
-hijri_date = date_info['hijri']
-event_of_day = date_info['event']  # ← این متغیر را تعریف می‌کند
-
-# نمایش هدر
-st.markdown(f"""
-<div class="custom-header">
-    <div class="title-section">
-        <h1>🏛️ داشبورد حرفه‌ای مدیریت بوتیک هتل محلاتی شیراز</h1>
-        <p>سیستم مدیریت هوشمند اقامتگاه</p>
-    </div>
-    <div class="date-section">
-        <div>📅 {jalali_date}</div>
-        <div style="font-size: 11px; opacity: 0.8;">{gregorian_date}</div>
-        <div style="font-size: 11px; opacity: 0.8;">{hijri_date}</div>
-        {f'<div class="event">🎉 {event_of_day}</div>' if event_of_day else ''}
-    </div>
-</div>
-""", unsafe_allow_html=True)
-# ============================================
 # توابع کمکی برای تبدیل تاریخ و اعداد
 # ============================================
 
@@ -227,15 +204,17 @@ def format_price_persian(price):
         return str(price)
 
 # ============================================
-# تنظیمات صفحه
+# دریافت تاریخ و نمایش هدر
 # ============================================
-st.set_page_config(
-    page_title=f"🏨 {HOTEL_CONFIG['name']} - داشبورد مدیریت",
-    page_icon="🏛️",
-    layout="wide",
-    initial_sidebar_state="expanded"
-)
 
+# دریافت تاریخ و مناسبت
+date_info = get_persian_date()
+
+# استخراج متغیرها
+jalali_date = date_info['jalali']
+gregorian_date = date_info['gregorian']
+hijri_date = date_info['hijri']
+event_of_day = date_info['event']
 
 # اعمال استایل هویتی
 st.markdown(f"""
@@ -368,10 +347,7 @@ st.markdown(f"""
 </style>
 """, unsafe_allow_html=True)
 
-# ============================================
-# نمایش هدر سفارشی با تاریخ و مناسبت
-# ============================================
-
+# نمایش هدر
 st.markdown(f"""
 <div class="custom-header">
     <div class="title-section">
@@ -379,9 +355,9 @@ st.markdown(f"""
         <p>سیستم مدیریت هوشمند اقامتگاه</p>
     </div>
     <div class="date-section">
-        <div>📅 {date_info['jalali']}</div>
-        <div style="font-size: 11px; opacity: 0.8;">{date_info['gregorian']}</div>
-        <div style="font-size: 11px; opacity: 0.8;">{date_info['hijri']}</div>
+        <div>📅 {jalali_date}</div>
+        <div style="font-size: 11px; opacity: 0.8;">{gregorian_date}</div>
+        <div style="font-size: 11px; opacity: 0.8;">{hijri_date}</div>
         {f'<div class="event">🎉 {event_of_day}</div>' if event_of_day else ''}
     </div>
 </div>
@@ -770,7 +746,7 @@ def plot_prediction_chart(prediction_data):
     return fig
 
 # ============================================
-# بخش مدیریت اطلاعات با قابلیت حذف و آپلود
+# بخش مدیریت اطلاعات
 # ============================================
 
 def management_section(guests_df, reservations_df, events_df):
@@ -778,7 +754,7 @@ def management_section(guests_df, reservations_df, events_df):
     
     tab1, tab2, tab3, tab4, tab5 = st.tabs(["👤 مهمانان", "🏠 رزروها", "🎭 ایونت‌ها", "📊 ثبت‌نام ایونت", "📤 آپلود فایل"])
     
-    # ===== تب ۱: مدیریت مهمانان با قابلیت حذف =====
+    # ===== تب ۱: مدیریت مهمانان =====
     with tab1:
         st.subheader("👤 مدیریت مهمانان")
         
@@ -799,17 +775,6 @@ def management_section(guests_df, reservations_df, events_df):
             display_guests['امتیاز_وفاداری'] = display_guests['امتیاز_وفاداری'].apply(to_persian_number)
         if 'شماره_تماس' in display_guests.columns:
             display_guests['شماره_تماس'] = display_guests['شماره_تماس'].apply(to_persian_number)
-        
-        if not display_guests.empty and 'guest_id' in display_guests.columns:
-            for idx, row in display_guests.iterrows():
-                col1, col2 = st.columns([10, 1])
-                with col1:
-                    st.write(f"{row['guest_id']} - {row['نام']} {row['نام_خانوادگی']} - {row['شماره_تماس']} - {row['شهر']} - {row['علاقه_هنری']}")
-                with col2:
-                    if st.button("🗑️", key=f"del_guest_{row['guest_id']}"):
-                        guests_df = guests_df[guests_df['guest_id'] != row['guest_id']]
-                        save_data(guests_df, reservations_df, events_df)
-                        st.rerun()
         
         st.dataframe(display_guests, use_container_width=True, hide_index=True)
         
@@ -844,7 +809,7 @@ def management_section(guests_df, reservations_df, events_df):
                     else:
                         st.error("❌ نام و شماره تماس الزامی است!")
     
-    # ===== تب ۲: مدیریت رزروها با قابلیت حذف =====
+    # ===== تب ۲: مدیریت رزروها =====
     with tab2:
         st.subheader("🏠 مدیریت رزروها")
         
@@ -867,17 +832,6 @@ def management_section(guests_df, reservations_df, events_df):
             )
         if 'قیمت_هر_شب' in display_res.columns:
             display_res['قیمت_هر_شب'] = display_res['قیمت_هر_شب'].apply(format_price_persian)
-        
-        if not display_res.empty and 'شناسه_رزرو' in display_res.columns:
-            for idx, row in display_res.iterrows():
-                col1, col2 = st.columns([10, 1])
-                with col1:
-                    st.write(f"{row['شناسه_رزرو']} - {row['اتاق']} - {row['تاریخ_ورود']} تا {row['تاریخ_خروج']} - {row['قیمت_هر_شب']}")
-                with col2:
-                    if st.button("🗑️", key=f"del_res_{row['شناسه_رزرو']}"):
-                        reservations_df = reservations_df[reservations_df['شناسه_رزرو'] != row['شناسه_رزرو']]
-                        save_data(guests_df, reservations_df, events_df)
-                        st.rerun()
         
         st.dataframe(display_res, use_container_width=True, hide_index=True)
         
@@ -912,7 +866,7 @@ def management_section(guests_df, reservations_df, events_df):
                     else:
                         st.error("❌ همه فیلدها را پر کنید!")
     
-    # ===== تب ۳: مدیریت ایونت‌ها با قابلیت حذف =====
+    # ===== تب ۳: مدیریت ایونت‌ها =====
     with tab3:
         st.subheader("🎭 مدیریت ایونت‌ها")
         
@@ -935,17 +889,6 @@ def management_section(guests_df, reservations_df, events_df):
             display_events['ظرفیت'] = display_events['ظرفیت'].apply(to_persian_number)
         if 'ثبت_نام' in display_events.columns:
             display_events['ثبت_نام'] = display_events['ثبت_نام'].apply(to_persian_number)
-        
-        if not display_events.empty and 'شناسه_ایونت' in display_events.columns:
-            for idx, row in display_events.iterrows():
-                col1, col2 = st.columns([10, 1])
-                with col1:
-                    st.write(f"{row['شناسه_ایونت']} - {row['نام_ایونت']} - {row['تاریخ']} - ظرفیت: {row['ظرفیت']} - ثبت‌نام: {row['ثبت_نام']}")
-                with col2:
-                    if st.button("🗑️", key=f"del_event_{row['شناسه_ایونت']}"):
-                        events_df = events_df[events_df['شناسه_ایونت'] != row['شناسه_ایونت']]
-                        save_data(guests_df, reservations_df, events_df)
-                        st.rerun()
         
         st.dataframe(display_events, use_container_width=True, hide_index=True)
         
@@ -1206,7 +1149,7 @@ def main():
             st.error("❌ خطای جدی در بارگذاری داده. لطفاً پوشه data را بررسی کنید.")
             st.stop()
     
-    # سایدبار با لوگو (بدون نام و آدرس)
+    # سایدبار با لوگو
     with st.sidebar:
         st.markdown(f"""
         <div class="sidebar-logo">
