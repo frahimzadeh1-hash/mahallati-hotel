@@ -8,7 +8,6 @@ import os
 import jdatetime
 from sklearn.linear_model import LinearRegression
 import numpy as np
-import requests
 
 # ============================================
 # تنظیمات صفحه - فقط یک بار و در ابتدا
@@ -49,11 +48,11 @@ HOTEL_CONFIG = {
 }
 
 # ============================================
-# توابع تاریخ و مناسبت‌ها
+# تابع تاریخ شمسی (ساده و بدون API)
 # ============================================
 
 def get_persian_date():
-    """گرفتن تاریخ شمسی، میلادی و قمری"""
+    """گرفتن تاریخ شمسی"""
     now = datetime.now()
     persian = jdatetime.datetime.fromgregorian(date=now)
     
@@ -61,67 +60,7 @@ def get_persian_date():
     months = ['فروردین', 'اردیبهشت', 'خرداد', 'تیر', 'مرداد', 'شهریور', 
               'مهر', 'آبان', 'آذر', 'دی', 'بهمن', 'اسفند']
     
-    return {
-        'jalali': f"{days[persian.weekday()]} {persian.day} {months[persian.month-1]} {persian.year}",
-        'gregorian': now.strftime("%A, %B %d, %Y"),
-        'hijri': get_hijri_date(now),
-        'event': get_event_of_day()
-    }
-
-def get_hijri_date(date_obj):
-    """گرفتن تاریخ قمری با API"""
-    try:
-        url = f"https://api.aladhan.com/v1/gToH/{date_obj.year}/{date_obj.month}/{date_obj.day}"
-        response = requests.get(url, timeout=5)
-        if response.status_code == 200:
-            data = response.json()
-            if data['code'] == 200:
-                hijri = data['data']['hijri']
-                return f"{hijri['day']} {hijri['month']['en']} {hijri['year']} هجری قمری"
-    except:
-        pass
-    return "تاریخ قمری در دسترس نیست"
-
-def get_event_of_day():
-    """گرفتن مناسبت روز با API"""
-    try:
-        url = "https://api.parsijoo.ir/events/today"
-        response = requests.get(url, timeout=5)
-        if response.status_code == 200:
-            data = response.json()
-            if data and 'events' in data:
-                events = data['events']
-                return " - ".join(events[:2])
-    except:
-        pass
-    return get_fallback_event()
-
-def get_fallback_event():
-    """مناسبت‌های ثابت در صورت عدم دسترسی به API"""
-    now = datetime.now()
-    persian = jdatetime.datetime.fromgregorian(date=now)
-    month = persian.month
-    day = persian.day
-    
-    events = {
-        (1, 1): "🎉 جشن نوروز",
-        (1, 13): "🌿 روز طبیعت",
-        (2, 25): "📚 روز فردوسی",
-        (3, 1): "🌾 روز خرداد",
-        (4, 14): "🌸 تولد امام رضا (ع)",
-        (6, 21): "📜 روز شعر و ادب فارسی",
-        (7, 7): "🍷 تولد حافظ",
-        (10, 15): "📖 روز سعدی"
-    }
-    
-    for (m, d), event in events.items():
-        if m == month and d == day:
-            return event
-    
-    if persian.weekday() == 6:
-        return "🕌 روز جمعه"
-    
-    return ""
+    return f"{days[persian.weekday()]} {persian.day} {months[persian.month-1]} {persian.year}"
 
 # ============================================
 # توابع کمکی
@@ -164,14 +103,10 @@ def format_price_persian(price):
         return str(price)
 
 # ============================================
-# دریافت تاریخ و نمایش هدر
+# دریافت تاریخ شمسی
 # ============================================
 
-date_info = get_persian_date()
-jalali_date = date_info['jalali']
-gregorian_date = date_info['gregorian']
-hijri_date = date_info['hijri']
-event_of_day = date_info['event']
+jalali_date = get_persian_date()
 
 # اعمال استایل
 st.markdown(f"""
@@ -205,18 +140,12 @@ st.markdown(f"""
     }}
     .custom-header .date-section {{
         text-align: left;
-        font-size: 13px;
+        font-size: 15px;
         color: rgba(255,255,255,0.95);
-        line-height: 1.8;
         background: rgba(0,0,0,0.15);
-        padding: 8px 15px;
+        padding: 8px 18px;
         border-radius: 8px;
-        min-width: 200px;
-    }}
-    .custom-header .date-section .event {{
-        color: {HOTEL_CONFIG['colors']['accent']};
         font-weight: bold;
-        font-size: 14px;
     }}
     .stMetric {{
         background-color: white;
@@ -289,10 +218,7 @@ st.markdown(f"""
         <p>سیستم مدیریت هوشمند اقامتگاه</p>
     </div>
     <div class="date-section">
-        <div>📅 {jalali_date}</div>
-        <div style="font-size: 11px; opacity: 0.8;">{gregorian_date}</div>
-        <div style="font-size: 11px; opacity: 0.8;">{hijri_date}</div>
-        {f'<div class="event">🎉 {event_of_day}</div>' if event_of_day else ''}
+        📅 {jalali_date}
     </div>
 </div>
 """, unsafe_allow_html=True)
